@@ -1,78 +1,143 @@
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Venda } from '@/context/SalesContext'; // Certifique-se que este import está correto
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Venda } from '@/context/SalesContext'; 
-// REMOVIDO: Não precisamos mais do useClients
-// import { useClients } from '@/context/ClientsContext'; 
+import { Card } from '@/components/ui/Card';
 
-type SaleListItemProps = {
-  sale: Venda; // Recebe a Venda POPULADA
+type Props = {
+  sale: Venda;
   onPress: () => void;
 };
 
-export function SaleListItem({ sale, onPress }: SaleListItemProps) {
+// Função de formatação segura
+function formatCurrency(value: number | string | undefined) {
+  if (value === undefined || value === null) return 'R$ 0,00';
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(numValue)) return 'R$ 0,00';
+
+  try {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(numValue);
+  } catch (error) {
+    return 'R$ ' + numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+}
+
+export function SaleListItem({ sale, onPress }: Props) {
   const theme = useColorScheme() ?? 'light';
-  const iconColor = Colors[theme].icon;
 
-  // REMOVIDO: A lógica de procurar o cliente não é mais necessária
-  // const { clients } = useClients();
-  // const client = clients.find((c) => c._id === sale.cliente);
+  const dateObj = new Date(sale.dataVenda);
+  const dateStr = isNaN(dateObj.getTime()) 
+    ? 'Data inválida' 
+    : dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  
+  // CORREÇÃO AQUI: Mudamos de sale.total para sale.valorTotal
+  const formattedValue = formatCurrency(sale.valorTotal);
 
-  // ATUALIZADO: Acedemos ao nome diretamente do objeto populado
-  // Adicionamos '?' para o caso de um cliente ter sido eliminado
-  const clientName = sale.cliente?.fullName ?? 'Cliente não encontrado';
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'Entregue': return Colors[theme].success; 
+      case 'Disponível para Retirada': return '#2563EB'; 
+      case 'Aguardando Laboratório': return '#F59E0B'; 
+      default: return '#64748B'; 
+    }
+  };
+
+  const statusColor = getStatusColor(sale.ordemServico?.status);
+
+  const clientName = typeof sale.cliente === 'object' && sale.cliente 
+    ? sale.cliente.fullName 
+    : 'Cliente (Removido)';
 
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView style={styles.card}>
-        <View style={styles.iconContainer}>
-          <IconSymbol name="cart.fill" size={24} color={iconColor} />
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <Card style={styles.cardContent}>
+        
+        <View style={[styles.iconContainer, { backgroundColor: Colors[theme].tint + '15' }]}>
+          <IconSymbol name="paperclip" size={24} color={Colors[theme].tint} />
         </View>
+
         <View style={styles.infoContainer}>
-          {/* ATUALIZADO: Usamos a variável clientName */}
-          <ThemedText type="defaultSemiBold">{clientName}</ThemedText>
-          
-          <ThemedText style={styles.detailText}>
-            {new Date(sale.dataVenda).toLocaleDateString('pt-BR')}
+          <ThemedText type="defaultSemiBold" numberOfLines={1} style={styles.clientName}>
+            {clientName}
           </ThemedText>
           
-          <ThemedText style={styles.detailText}>
-            Total: R$ {sale.valorTotal.toFixed(2)}
-          </ThemedText>
+          <View style={styles.dateRow}>
+            <IconSymbol name="calendar" size={12} color={Colors[theme].icon} />
+            <ThemedText style={styles.dateText}>{dateStr}</ThemedText>
+          </View>
         </View>
-        <View style={styles.chevronContainer}>
-          <IconSymbol name="chevron.right" size={18} color={iconColor} />
+
+        <View style={styles.rightContainer}>
+            <ThemedText type="defaultSemiBold" style={[styles.valueText, { color: Colors[theme].tint }]}>
+                {formattedValue}
+            </ThemedText>
+
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                <ThemedText style={[styles.statusText, { color: statusColor }]}>
+                    {sale.ordemServico?.status || 'Pendente'}
+                </ThemedText>
+            </View>
         </View>
-      </ThemedView>
-    </Pressable>
+
+        <IconSymbol name="chevron.right" size={20} color={Colors[theme].icon} style={{ opacity: 0.4, marginLeft: 4 }} />
+      
+      </Card>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc', 
+    paddingHorizontal: 12,
+    gap: 12,
   },
   iconContainer: {
-    marginRight: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoContainer: {
     flex: 1,
-    gap: 2, 
+    justifyContent: 'center',
+    gap: 4,
   },
-  detailText: {
-    fontSize: 14,
-    color: '#666', 
+  clientName: {
+    fontSize: 16,
   },
-  chevronContainer: {
-    marginLeft: 'auto',
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  rightContainer: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  valueText: {
+    fontSize: 16,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

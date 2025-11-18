@@ -1,68 +1,81 @@
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Cliente } from '@/context/ClientsContext';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Cliente } from '@/context/ClientsContext'; // Importar o tipo
+import { Card } from '@/components/ui/Card';
 
-type ClientListItemProps = {
-  client: Cliente; // Recebe o objeto cliente completo
-  onPress: () => void; // Função para quando o item for clicado
+type Props = {
+  client: Cliente;
+  onPress: () => void;
 };
 
-export function ClientListItem({ client, onPress }: ClientListItemProps) {
+export function ClientListItem({ client, onPress }: Props) {
   const theme = useColorScheme() ?? 'light';
-  const iconColor = Colors[theme].icon;
+
+  // Formatar telefone simples para visualização (opcional)
+  // Ex: 11999999999 -> (11) 99999-9999 (Implementação básica apenas visual)
+  const formattedPhone = client.phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
 
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView style={styles.card}>
-        <View style={styles.iconContainer}>
-          <IconSymbol name="person.2.fill" size={24} color={iconColor} />
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <Card style={styles.cardContent}>
+        
+        {/* Avatar Placeholder */}
+        <View style={[styles.avatarContainer, { backgroundColor: Colors[theme].tint + '15' }]}>
+          <IconSymbol name="person.fill" size={24} color={Colors[theme].tint} />
         </View>
+
+        {/* Informações Principais */}
         <View style={styles.infoContainer}>
-          {/* MUDANÇA: de name para fullName */}
-          <ThemedText type="defaultSemiBold">{client.fullName}</ThemedText>
+          <ThemedText type="defaultSemiBold" style={styles.nameText} numberOfLines={1}>
+            {client.fullName}
+          </ThemedText>
           
-          {/* MUDANÇA: Exibindo o telefone (campo principal) */}
-          <ThemedText style={styles.detailText}>{client.phone}</ThemedText>
-          
-          {/* Exibe o CPF se existir */}
-          {client.cpf && (
-            <ThemedText style={styles.detailText}>{client.cpf}</ThemedText>
-          )}
+          <View style={styles.row}>
+            <IconSymbol name="phone.fill" size={12} color={Colors[theme].icon} />
+            <ThemedText style={styles.phoneText}>{formattedPhone || client.phone}</ThemedText>
+          </View>
         </View>
-        <View style={styles.chevronContainer}>
-          <IconSymbol name="chevron.right" size={18} color={iconColor} />
-        </View>
-      </ThemedView>
-    </Pressable>
+
+        {/* Ícone de Seta */}
+        <IconSymbol name="chevron.right" size={20} color={Colors[theme].icon} style={{ opacity: 0.5 }} />
+      
+      </Card>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc', 
+    gap: 16,
+    paddingVertical: 12, // Padding interno do card levemente ajustado
   },
-  iconContainer: {
-    marginRight: 16,
+  avatarContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25, // Círculo perfeito
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoContainer: {
     flex: 1,
-    gap: 2, 
+    gap: 4,
   },
-  detailText: {
+  nameText: {
+    fontSize: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  phoneText: {
     fontSize: 14,
-    color: '#666', 
-  },
-  chevronContainer: {
-    marginLeft: 'auto',
+    color: '#64748B',
   },
 });

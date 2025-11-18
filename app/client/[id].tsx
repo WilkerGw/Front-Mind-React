@@ -1,131 +1,222 @@
-import { StyleSheet, Pressable, Alert, Button, ScrollView, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
+import React, { useState } from 'react';
+import { StyleSheet, ScrollView, Alert, ActivityIndicator, View, TouchableOpacity, Linking } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useClients } from '@/context/ClientsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { Card } from '@/components/ui/Card';
+import { ModernButton } from '@/components/ui/ModernButton';
 
-// Componente InfoRow (atualizado para aceitar 'number')
-const InfoRow = ({ label, value }: { label: string; value?: string | number }) => {
-  if (value === undefined || value === null || value === '') return null;
-  return (
-    <ThemedView style={styles.infoRow}>
-      <ThemedText style={styles.label}>{label}</ThemedText>
-      <ThemedText style={styles.value}>{value}</ThemedText>
-    </ThemedView>
-  );
-};
-
-export default function ClientDetailScreen() {
+export default function ClientDetailsScreen() {
+  const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>(); 
-  const { getClientById, deleteClient } = useClients();
   const theme = useColorScheme() ?? 'light';
-  const tintColor = Colors[theme].tint;
+  const { getClientById, deleteClient, isLoading } = useClients();
 
-  const client = getClientById(id);
-
-  const handleEdit = () => {
-    router.push({ pathname: '/edit-client', params: { id: id } });
-  };
+  const client = getClientById(id as string);
 
   const handleDelete = () => {
     Alert.alert(
-      "Eliminar Cliente",
-      `Tem a certeza que deseja eliminar ${client?.fullName}? Esta ação não pode ser revertida.`, // MUDANÇA: fullName
+      "Excluir Cliente",
+      "Tem certeza? Isso não pode ser desfeito.",
       [
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
+        { 
+          text: "Excluir", 
           style: "destructive", 
-          onPress: () => {
-            deleteClient(id);
-            router.back(); 
-          },
-        },
+          onPress: async () => {
+            await deleteClient(id as string);
+            router.back();
+          }
+        }
       ]
     );
   };
 
+  const handleCall = () => {
+    if (client?.phone) {
+        Linking.openURL(`tel:${client.phone}`);
+    }
+  };
+
+  const handleWhatsApp = () => {
+      if (client?.phone) {
+          const cleanPhone = client.phone.replace(/\D/g, ''); 
+          Linking.openURL(`https://wa.me/55${cleanPhone}`);
+      }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
+        <ActivityIndicator size="large" color={Colors[theme].tint} />
+      </View>
+    );
+  }
+
   if (!client) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="subtitle">Cliente não encontrado.</ThemedText>
-      </ThemedView>
+      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
+        <ThemedText>Cliente não encontrado.</ThemedText>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
+      {/* 1. Ajuste no Stack.Screen para o ícone de voltar */}
       <Stack.Screen 
         options={{ 
-          title: client.fullName, // MUDANÇA: fullName
-          headerRight: () => (
-            <Pressable onPress={handleEdit} style={{ paddingRight: 8 }}>
-              <IconSymbol size={24} name="pencil" color={tintColor} />
-            </Pressable>
+          title: '', // Título vazio para não sobrepor o nome do cliente
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+              <IconSymbol name="arrow.left" size={24} color={Colors[theme].icon} />
+            </TouchableOpacity>
           ),
+          headerStyle: {
+            backgroundColor: Colors[theme].background, // Cor de fundo do header
+          },
+          headerShadowVisible: false, // Remover sombra padrão do header
         }} 
       />
-      <ScrollView>
-        {/* MUDANÇA: Campos atualizados */}
-        <ThemedText type="subtitle" style={styles.title}>Dados Pessoais</ThemedText>
-        <InfoRow label="Nome" value={client.fullName} />
-        <InfoRow label="Telefone" value={client.phone} />
-        <InfoRow label="Email" value={client.email} />
-        <InfoRow label="Data de Nasc." value={client.birthDate} />
-        <InfoRow label="CPF" value={client.cpf} />
-        <InfoRow label="Gênero" value={client.gender} />
-        <InfoRow label="CEP" value={client.cep} />
-        <InfoRow label="Endereço" value={client.address} />
-        <InfoRow label="Observações" value={client.notes} />
 
-        {/* MUDANÇA: Receita atualizada (estrutura chata) */}
-        <ThemedText type="subtitle" style={styles.title}>Receita</ThemedText>
-        <InfoRow label="Vencimento da Receita" value={client.vencimentoReceita} />
-
-        <ThemedText type="defaultSemiBold" style={styles.title}>Olho Direito (OD)</ThemedText>
-        <View style={styles.grid}>
-          <InfoRow label="Esférico" value={client.esfericoDireito} />
-          <InfoRow label="Cilíndrico" value={client.cilindricoDireito} />
-        </View>
-        <InfoRow label="Eixo" value={client.eixoDireito} />
+      <ScrollView contentContainerStyle={styles.content}>
         
-        <ThemedText type="defaultSemiBold" style={styles.title}>Olho Esquerdo (OE)</ThemedText>
-        <View style={styles.grid}>
-          <InfoRow label="Esférico" value={client.esfericoEsquerdo} />
-          <InfoRow label="Cilíndrico" value={client.cilindricoEsquerdo} />
+        {/* Cabeçalho do Perfil */}
+        <View style={styles.profileHeader}>
+            <View style={[styles.avatarLarge, { backgroundColor: Colors[theme].tint }]}>
+                <ThemedText style={styles.avatarInitials}>
+                    {client.fullName.substring(0, 1).toUpperCase()}
+                </ThemedText>
+            </View>
+            <ThemedText type="title" style={{ textAlign: 'center', marginTop: 12 }}>{client.fullName}</ThemedText>
+            <ThemedText style={{ opacity: 0.6 }}>{client.phone}</ThemedText>
+            
+            {/* Ações Rápidas de Contato com ÍCONES */}
+            <View style={styles.quickActions}>
+                <TouchableOpacity style={[styles.circleBtn, { backgroundColor: Colors[theme].tint }]} onPress={handleCall}>
+                    <IconSymbol name="phone.fill" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.circleBtn, { backgroundColor: '#25D366' }]} onPress={handleWhatsApp}>
+                    <IconSymbol name="whatsapp" size={20} color="#fff" />
+                </TouchableOpacity>
+            </View>
         </View>
-        <InfoRow label="Eixo" value={client.eixoEsquerdo} />
 
-        <ThemedText type="defaultSemiBold" style={styles.title}>Geral</ThemedText>
-        <InfoRow label="Adição" value={client.adicao} />
-        
-        <View style={styles.deleteButtonContainer}>
-          <Button 
-            title="Eliminar Cliente" 
-            color={Colors.light.icon}
-            onPress={handleDelete} 
-          />
+        {/* Seção 1: Dados Pessoais */}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Dados Pessoais</ThemedText>
+        <Card>
+            <InfoRow label="CPF" value={client.cpf || '-'} />
+            <View style={styles.divider} />
+            <InfoRow label="Data de Nasc." value={client.birthDate || '-'} />
+            <View style={styles.divider} />
+            <InfoRow label="Gênero" value={client.gender || '-'} />
+            <View style={styles.divider} />
+            <InfoRow label="Endereço" value={client.address || '-'} />
+            {client.cep && <InfoRow label="CEP" value={client.cep} />}
+        </Card>
+
+        {/* Seção 2: Dados da Receita (Se houver) */}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Dados da Receita</ThemedText>
+        <Card>
+            {/* Olho Direito */}
+            <View style={styles.eyeSection}>
+                <ThemedText type="defaultSemiBold" style={{ marginBottom: 8, color: Colors[theme].tint }}>Olho Direito (OD)</ThemedText>
+                <View style={styles.grid}>
+                    <GridItem label="Esférico" value={client.esfericoDireito} />
+                    <GridItem label="Cilíndrico" value={client.cilindricoDireito} />
+                    <GridItem label="Eixo" value={client.eixoDireito} />
+                </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Olho Esquerdo */}
+            <View style={styles.eyeSection}>
+                <ThemedText type="defaultSemiBold" style={{ marginBottom: 8, color: Colors[theme].tint }}>Olho Esquerdo (OE)</ThemedText>
+                <View style={styles.grid}>
+                    <GridItem label="Esférico" value={client.esfericoEsquerdo} />
+                    <GridItem label="Cilíndrico" value={client.cilindricoEsquerdo} />
+                    <GridItem label="Eixo" value={client.eixoEsquerdo} />
+                </View>
+            </View>
+
+            <View style={styles.divider} />
+            
+            <View style={styles.grid}>
+                <GridItem label="Adição" value={client.adicao} />
+                <GridItem label="Vencimento" value={client.vencimentoReceita} />
+            </View>
+        </Card>
+
+         {/* Seção 3: Observações */}
+         {client.notes && (
+            <>
+             <ThemedText type="subtitle" style={styles.sectionTitle}>Observações</ThemedText>
+             <Card>
+                 <ThemedText>{client.notes}</ThemedText>
+             </Card>
+             </>
+         )}
+
+        {/* Botões de Ação */}
+        <View style={styles.actionButtons}>
+            <ModernButton 
+                title="Editar Dados" 
+                onPress={() => router.push(`/edit-client?id=${client._id}`)} 
+            />
+            <ModernButton 
+                title="Excluir Cliente" 
+                onPress={handleDelete} 
+                variant="danger"
+            />
         </View>
+
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
+// Componentes Auxiliares Locais
+function InfoRow({ label, value }: { label: string, value: string }) {
+    return (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+            <ThemedText style={{ opacity: 0.6 }}>{label}</ThemedText>
+            <ThemedText type="defaultSemiBold">{value}</ThemedText>
+        </View>
+    );
+}
+
+function GridItem({ label, value }: { label: string, value?: string }) {
+    return (
+        <View style={{ flex: 1, alignItems: 'center' }}>
+            <ThemedText style={{ fontSize: 12, opacity: 0.5 }}>{label}</ThemedText>
+            <ThemedText type="defaultSemiBold">{value || '-'}</ThemedText>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  title: { marginTop: 16, marginBottom: 8 },
-  label: { fontSize: 14, color: '#666' },
-  value: { fontSize: 18, marginBottom: 4 },
-  grid: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  infoRow: { marginBottom: 16, flex: 1 },
-  deleteButtonContainer: {
-    marginTop: 32,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ccc',
-    paddingTop: 16,
-  }
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  content: { padding: 20 },
+  
+  profileHeader: { alignItems: 'center', marginBottom: 24 },
+  avatarLarge: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  avatarInitials: { color: '#fff', fontSize: 32, fontWeight: 'bold' },
+  
+  quickActions: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  circleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center' }, // Cor padrão do botão
+  
+  sectionTitle: { marginTop: 16, marginBottom: 8, marginLeft: 4 },
+  
+  divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.1)', marginVertical: 8 },
+  
+  eyeSection: { paddingVertical: 4 },
+  grid: { flexDirection: 'row', justifyContent: 'space-between' },
+  
+  actionButtons: { gap: 12, marginTop: 32, marginBottom: 40 },
 });

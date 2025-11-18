@@ -1,74 +1,71 @@
-import { StyleSheet, FlatList, ActivityIndicator, View, TextInput, Pressable } from 'react-native';
-import { ThemedView } from '@/components/themed-view';
-import { SaleListItem } from '@/components/management/SaleListItem';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSales } from '@/context/SalesContext';
-import { useRouter } from 'expo-router'; 
-import { ThemedText } from '@/components/themed-text';
-import { useState } from 'react';
+import { SaleListItem } from '@/components/management/SaleListItem';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ModernButton } from '@/components/ui/ModernButton';
 
 export default function VendasScreen() {
   const { sales, isLoading } = useSales();
-  const theme = useColorScheme() ?? 'light';
-  const router = useRouter(); 
-
-  // 1. Estado para a busca
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const theme = useColorScheme() ?? 'light';
+  const router = useRouter();
 
   const handleSalePress = (saleId: string) => {
     router.push(`/sale/${saleId}`);
   };
 
-  // 2. Lógica de Filtragem (Busca por Nome do Cliente)
-  const filteredSales = sales.filter((sale) => {
-    // Acessa o nome do cliente de forma segura (usa '' se o cliente for null/undefined)
-    const clientName = sale.cliente?.fullName?.toLowerCase() || ''; 
-    return clientName.includes(searchQuery.toLowerCase());
-  });
-
-  // Estilos dinâmicos
-  const searchContainerStyle = {
-    backgroundColor: theme === 'dark' ? '#333' : '#f0f0f0',
-    borderColor: Colors[theme].icon,
-  };
-  const inputColor = Colors[theme].text;
-  const placeholderColor = Colors[theme].icon;
+  // Filtro de Busca (Nome do Cliente)
+  const filteredSales = useMemo(() => {
+    if (!searchQuery.trim()) return sales;
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    return sales.filter((sale) => {
+        // Tratamento seguro para caso o cliente não esteja populado
+        const clientName = typeof sale.cliente === 'object' ? sale.cliente?.fullName : '';
+        return clientName?.toLowerCase().includes(lowerQuery);
+    });
+  }, [sales, searchQuery]);
 
   if (isLoading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
         <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </ThemedView>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
       
-      {/* 3. BARRA DE PESQUISA */}
-      <View style={[styles.searchBarContainer, searchContainerStyle]}>
-        <IconSymbol name="magnifyingglass" size={20} color={placeholderColor} />
-        
-        <TextInput
-          style={[styles.searchInput, { color: inputColor }]}
-          placeholder="Pesquisar por nome do cliente..."
-          placeholderTextColor={placeholderColor}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="words" 
-          autoCorrect={false}
-        />
+      {/* Header Fixo Moderno */}
+      <View style={[styles.header, { backgroundColor: Colors[theme].surface }]}>
+        <View style={styles.titleRow}>
+          <ThemedText type="title">Vendas</ThemedText>
+          <ModernButton 
+            title="+" 
+            onPress={() => router.push('/add-sale')} 
+            style={{ width: 42, height: 42, borderRadius: 21, paddingHorizontal: 0 }}
+          />
+        </View>
 
-        {/* Botão limpar busca */}
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')}>
-            <IconSymbol name="xmark.circle.fill" size={18} color={placeholderColor} />
-          </Pressable>
-        )}
+        <View style={[styles.searchBar, { backgroundColor: theme === 'dark' ? '#334155' : '#F1F5F9' }]}>
+          <IconSymbol size={20} name="magnifyingglass" color={Colors[theme].icon} />
+          <TextInput
+            style={[styles.searchInput, { color: Colors[theme].text }]}
+            placeholder="Buscar por nome do cliente..."
+            placeholderTextColor={Colors[theme].icon}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+          />
+        </View>
       </View>
-      {/* FIM DA BARRA DE PESQUISA */}
 
       <FlatList
         data={filteredSales}
@@ -79,13 +76,15 @@ export default function VendasScreen() {
             onPress={() => handleSalePress(item._id)}
           />
         )}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
+            <IconSymbol name="paperclip" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
             <ThemedText style={{ opacity: 0.6 }}>Nenhuma venda encontrada.</ThemedText>
           </View>
         }
       />
-    </ThemedView>
+    </View>
   );
 }
 
@@ -98,26 +97,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Estilos da Barra de Pesquisa
-  searchBarContainer: {
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 4,
+    zIndex: 10,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'transparent', 
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 10,
     fontSize: 16,
     height: '100%',
   },
-  emptyContainer: {
+  listContent: {
     padding: 20,
+    paddingTop: 10,
+    gap: 6,
+  },
+  emptyContainer: {
     alignItems: 'center',
-    marginTop: 20,
-  }
+    justifyContent: 'center',
+    marginTop: 60,
+  },
 });

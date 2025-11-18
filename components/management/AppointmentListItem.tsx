@@ -1,99 +1,144 @@
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Agendamento } from '@/context/AppointmentsContext';
+import { useClients } from '@/context/ClientsContext'; // Para buscar nome se necessário
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Agendamento } from '@/context/AppointmentsContext';
-import { useClients } from '@/context/ClientsContext'; 
+import { Card } from '@/components/ui/Card'; // Usando nosso novo Card
 
-type AppointmentListItemProps = {
+type Props = {
   appointment: Agendamento;
   onPress: () => void;
 };
 
-const formatDateTime = (date: Date) => {
-  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  return `${time} - ${day}`;
-};
-
-export function AppointmentListItem({ appointment, onPress }: AppointmentListItemProps) {
+export function AppointmentListItem({ appointment, onPress }: Props) {
   const theme = useColorScheme() ?? 'light';
-  const iconColor = Colors[theme].icon;
-  
   const { getClientById } = useClients();
-  
-  // --- AQUI ESTÁ A CORREÇÃO ---
-  // 1. Tenta encontrar o cliente pelo clientId (para novos dados)
-  const client = appointment.clientId ? getClientById(appointment.clientId) : null;
-  
-  // 2. Se encontrar, usa o client.fullName. 
-  //    Senão, usa o appointment.name (para dados antigos do Mongo).
-  const clientName = client ? client.fullName : (appointment.name || 'Cliente não encontrado');
-  // --- FIM DA CORREÇÃO ---
+
+  // Resolver nome do cliente
+  const clientName = appointment.clientId 
+    ? getClientById(appointment.clientId)?.fullName 
+    : appointment.name;
+
+  // Formatar data
+  const dateObj = new Date(appointment.date);
+  const day = dateObj.getDate().toString().padStart(2, '0');
+  const month = dateObj.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase();
+  const time = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  // Cor baseada no status
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Confirmado': return Colors[theme].success;
+      case 'Cancelado': return Colors[theme].danger;
+      case 'Concluído': return '#64748B'; // Cinza
+      default: return Colors[theme].tint; // Marcado (Azul)
+    }
+  };
+
+  const statusColor = getStatusColor(appointment.status);
 
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView style={styles.card}>
-        <View style={styles.timeContainer}>
-          <ThemedText style={styles.timeText}>
-            {formatDateTime(appointment.date)} 
-          </ThemedText>
-        </View>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <Card style={styles.cardContainer}>
+        {/* Barra lateral colorida */}
+        <View style={[styles.statusStrip, { backgroundColor: statusColor }]} />
         
-        <View style={styles.infoContainer}>
-          <ThemedText type="defaultSemiBold">{appointment.tipo}</ThemedText>
-          <ThemedText style={styles.clientText}>
-            {clientName}
-          </ThemedText>
-          <ThemedText style={styles.statusText}>
-            Status: {appointment.status}
-          </ThemedText>
-        </View>
+        <View style={styles.contentContainer}>
+            {/* Coluna da Data (Esquerda) */}
+            <View style={styles.dateBox}>
+                <ThemedText style={styles.dayText}>{day}</ThemedText>
+                <ThemedText style={styles.monthText}>{month}</ThemedText>
+            </View>
 
-        <View style={styles.chevronContainer}>
-          <IconSymbol name="chevron.right" size={18} color={iconColor} />
+            {/* Coluna de Detalhes (Meio) */}
+            <View style={styles.infoBox}>
+                <ThemedText type="defaultSemiBold" numberOfLines={1} style={styles.clientName}>
+                    {clientName || 'Cliente Desconhecido'}
+                </ThemedText>
+                
+                <View style={styles.row}>
+                    <IconSymbol name="clock" size={12} color={Colors[theme].icon} />
+                    <ThemedText style={styles.detailText}>{time} • {appointment.tipo}</ThemedText>
+                </View>
+
+                <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                     <ThemedText style={[styles.statusText, { color: statusColor }]}>
+                        {appointment.status.toUpperCase()}
+                     </ThemedText>
+                </View>
+            </View>
+
+            {/* Seta (Direita) */}
+            <IconSymbol name="chevron.right" size={20} color={Colors[theme].icon} style={{ opacity: 0.5 }} />
         </View>
-      </ThemedView>
-    </Pressable>
+      </Card>
+    </TouchableOpacity>
   );
 }
 
-// ... (estilos não mudam)
 const styles = StyleSheet.create({
-  card: {
+  cardContainer: {
+    padding: 0, // Remove padding padrão do Card para controlar layout interno
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
-  },
-  timeContainer: {
-    paddingRight: 16,
-    borderRightWidth: 1,
-    borderRightColor: '#eee',
+    overflow: 'hidden', // Para a barra lateral não sair do card
     alignItems: 'center',
   },
-  timeText: {
-    fontSize: 16,
+  statusStrip: {
+    width: 6,
+    height: '100%',
+  },
+  contentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    padding: 16,
+    alignItems: 'center',
+    gap: 16,
+  },
+  dateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 12,
+    padding: 10,
+    minWidth: 50,
+  },
+  dayText: {
+    fontSize: 20,
     fontWeight: 'bold',
   },
-  infoContainer: {
-    flex: 1,
-    paddingLeft: 16,
-    gap: 2,
+  monthText: {
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.6,
   },
-  clientText: {
-    fontSize: 15,
+  infoBox: {
+    flex: 1,
+    gap: 4,
+  },
+  clientName: {
+    fontSize: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
   },
   statusText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  chevronContainer: {
-    marginLeft: 'auto',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

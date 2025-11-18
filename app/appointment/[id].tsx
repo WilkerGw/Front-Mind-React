@@ -1,112 +1,240 @@
-import { StyleSheet, Pressable, Alert, Button, ScrollView, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
+import React, { useState } from 'react';
+import { StyleSheet, ScrollView, Alert, ActivityIndicator, View, TouchableOpacity, Switch } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+
 import { ThemedView } from '@/components/themed-view';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useAppointments } from '@/context/AppointmentsContext';
-import { useClients } from '@/context/ClientsContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
-// Componente InfoRow (sem mudanças)
-const InfoRow = ({ label, value }: { label: string; value?: string | number }) => {
-  if (value === undefined || value === null || value === '') return null;
-  return (
-    <ThemedView style={styles.infoRow}>
-      <ThemedText style={styles.label}>{label}</ThemedText>
-      <ThemedText style={styles.value}>{value}</ThemedText>
-    </ThemedView>
-  );
-};
+import { useAppointments, StatusAgendamento } from '@/context/AppointmentsContext';
+import { useClients } from '@/context/ClientsContext';
 
-export default function AppointmentDetailScreen() {
+export default function AppointmentDetailsScreen() {
+  const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>(); 
-  const { getAppointmentById, deleteAppointment } = useAppointments();
-  const { getClientById } = useClients();
   const theme = useColorScheme() ?? 'light';
-  const tintColor = Colors[theme].tint;
 
-  const appointment = getAppointmentById(id);
-  const client = appointment ? getClientById(appointment.clientId) : undefined;
+  const { getAppointmentById, updateAppointment, deleteAppointment, isLoading: apptLoading } = useAppointments();
+  const { getClientById, isLoading: clientsLoading } = useClients();
 
-  const handleEdit = () => {
-    router.push({ pathname: '/edit-appointment', params: { id: id } });
-  };
+  const appointment = getAppointmentById(id as string);
+  const client = appointment?.clientId ? getClientById(appointment.clientId) : null;
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Eliminar Agendamento",
-      `Tem a certeza que deseja eliminar este agendamento?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive", 
-          onPress: () => {
-            deleteAppointment(id);
-            router.back(); 
-          },
-        },
-      ]
-    );
-  };
+  const clientName = client?.fullName || appointment?.name || 'Cliente não identificado';
+  const clientPhone = client?.phone || appointment?.telephone || 'Telefone não informado';
 
-  if (!appointment || !client) {
+  const isLoading = apptLoading || clientsLoading;
+
+  // Estado local para feedback visual imediato (opcional, mas melhora a UX)
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  if (isLoading) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="subtitle">Agendamento ou Cliente não encontrado.</ThemedText>
+      <ThemedView style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors[theme].tint} />
       </ThemedView>
     );
   }
 
+  if (!appointment) {
+    return (
+      <ThemedView style={styles.centered}>
+        <IconSymbol name="exclamationmark.triangle" size={48} color="#FF3B30" />
+        <ThemedText type="title" style={{ marginTop: 16 }}>Agendamento não encontrado</ThemedText>
+        <TouchableOpacity style={styles.buttonSecondary} onPress={() => router.back()}>
+            <ThemedText>Voltar</ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+    );
+  }
+
+  // --- LÓGICA DE ATUALIZAÇÃO ---
+
+  const handleStatusChange = async (newStatus: StatusAgendamento) => {
+    setIsUpdating(true);
+    try {
+      // Se mudar para "Marcado" ou "Cancelado", resetamos a compra para false por segurança
+      const shouldResetPurchase = newStatus !== 'Concluído';
+      await updateAppointment(appointment._id, { 
+        status: newStatus,
+        madePurchase: shouldResetPurchase ? false : appointment.madePurchase 
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePurchaseToggle = async (value: boolean) => {
+    setIsUpdating(true);
+    try {
+      await updateAppointment(appointment._id, { madePurchase: value });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Excluir",
+      "Deseja realmente excluir?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Excluir", style: "destructive", onPress: async () => {
+            await deleteAppointment(appointment._id);
+            router.back();
+        }}
+      ]
+    );
+  };
+
+  const formattedDate = new Date(appointment.date).toLocaleDateString('pt-BR');
+  const formattedTime = new Date(appointment.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: appointment.tipo,
-          headerRight: () => (
-            <Pressable onPress={handleEdit} style={{ paddingRight: 8 }}>
-              <IconSymbol size={24} name="pencil" color={tintColor} />
-            </Pressable>
-          ),
-        }} 
-      />
-      <ScrollView>
-        <InfoRow label="Cliente" value={client.fullName} />
-        <InfoRow label="Telefone" value={client.phone} />
-        <InfoRow label="Tipo" value={appointment.tipo} />
-        <InfoRow label="Status" value={appointment.status} />
-        <InfoRow 
-          label="Data e Hora" 
-          // MUDANÇA: de data para date
-          value={appointment.date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} 
-        />
-        {/* MUDANÇA: de notas para observation */}
-        <InfoRow label="Observações" value={appointment.observation} /> 
+      <Stack.Screen options={{ title: 'Detalhes' }} />
+      
+      <ScrollView contentContainerStyle={styles.content}>
         
-        <View style={styles.deleteButtonContainer}>
-          <Button 
-            title="Eliminar Agendamento" 
-            color={Colors.light.icon}
-            onPress={handleDelete} 
-          />
+        {/* Cabeçalho */}
+        <View style={[styles.card, { backgroundColor: Colors[theme].background }]}>
+          <View style={styles.headerRow}>
+             <IconSymbol name="calendar" size={24} color={Colors[theme].tint} />
+             <ThemedText type="subtitle" style={{ marginLeft: 8 }}>{formattedDate} às {formattedTime}</ThemedText>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) }]}>
+            <ThemedText style={styles.statusText}>{appointment.status.toUpperCase()}</ThemedText>
+          </View>
         </View>
+
+        {/* Nova Seção: GESTÃO DO ATENDIMENTO */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>Gestão do Atendimento</ThemedText>
+          <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#333' : '#fff' }]}>
+            
+            <ThemedText style={{ marginBottom: 10, color: '#888' }}>Alterar situação:</ThemedText>
+            
+            {/* Botões de Status Rápido */}
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity 
+                style={[styles.actionButton, appointment.status === 'Concluído' && styles.activeGreen]} 
+                onPress={() => handleStatusChange('Concluído')}
+              >
+                <IconSymbol name="checkmark.circle.fill" size={20} color={appointment.status === 'Concluído' ? '#fff' : '#34C759'} />
+                <ThemedText style={[styles.actionText, appointment.status === 'Concluído' && { color: '#fff' }]}>Compareceu</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, appointment.status === 'Cancelado' && styles.activeRed]}
+                onPress={() => handleStatusChange('Cancelado')}
+              >
+                <IconSymbol name="xmark.circle.fill" size={20} color={appointment.status === 'Cancelado' ? '#fff' : '#FF3B30'} />
+                <ThemedText style={[styles.actionText, appointment.status === 'Cancelado' && { color: '#fff' }]}>Faltou</ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Toggle de Compra (Aparece apenas se Concluído) */}
+            {appointment.status === 'Concluído' && (
+              <View style={styles.purchaseRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                   <IconSymbol name="cart.fill" size={20} color={Colors[theme].text} />
+                   <ThemedText type="defaultSemiBold" style={{ marginLeft: 8 }}>Venda Realizada?</ThemedText>
+                </View>
+                <Switch 
+                  value={appointment.madePurchase || false}
+                  onValueChange={handlePurchaseToggle}
+                  trackColor={{ false: "#767577", true: Colors[theme].tint }}
+                />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Dados do Cliente */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>Cliente</ThemedText>
+          <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#333' : '#f9f9f9' }]}>
+            <ThemedText type="defaultSemiBold" style={{ fontSize: 18 }}>{clientName}</ThemedText>
+            <ThemedText style={{ marginTop: 4, color: '#666' }}>{clientPhone}</ThemedText>
+          </View>
+        </View>
+
+        {/* Botões Finais */}
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: Colors[theme].tint }]} 
+            onPress={() => router.push(`/edit-appointment?id=${appointment._id}`)}
+          >
+            <ThemedText style={styles.buttonText}>Editar Dados</ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.button, styles.buttonDestructive]} onPress={handleDelete}>
+            <ThemedText style={styles.buttonText}>Excluir Agendamento</ThemedText>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
+      
+      {/* Loading Overlay se estiver salvando */}
+      {isUpdating && (
+        <View style={styles.overlayLoading}>
+          <ActivityIndicator size="small" color="#fff" />
+        </View>
+      )}
     </ThemedView>
   );
 }
 
-// ... (estilos não mudam)
+function getStatusColor(status: string) {
+  switch (status) {
+    case 'Confirmado': return '#34C759';
+    case 'Cancelado': return '#FF3B30';
+    case 'Concluído': return '#8E8E93';
+    default: return '#007AFF';
+  }
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  infoRow: { marginBottom: 16 },
-  label: { fontSize: 14, color: '#666' },
-  value: { fontSize: 18 },
-  deleteButtonContainer: {
-    marginTop: 32,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ccc',
-    paddingTop: 16,
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  content: { padding: 16 },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  section: { marginTop: 20 },
+  sectionTitle: { marginBottom: 8, marginLeft: 4 },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  statusText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  
+  // Estilos novos para gestão
+  quickActionsRow: { flexDirection: 'row', gap: 10, marginTop: 5 },
+  actionButton: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', gap: 8
+  },
+  activeGreen: { backgroundColor: '#34C759', borderColor: '#34C759' },
+  activeRed: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
+  actionText: { fontWeight: '600', color: '#555' },
+  
+  purchaseRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#eee'
+  },
+
+  actionsContainer: { marginTop: 32, gap: 12 },
+  button: { padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  buttonSecondary: { marginTop: 20, padding: 12 },
+  buttonDestructive: { backgroundColor: '#FF3B30' },
+  buttonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  
+  overlayLoading: {
+    position: 'absolute', bottom: 30, alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, borderRadius: 20
   }
 });
