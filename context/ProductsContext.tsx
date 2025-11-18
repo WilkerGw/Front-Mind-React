@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Alert } from 'react-native';
-// O uuid não é mais necessário aqui, o Mongo gera o _id
 
 // O IP da sua API
 const API_URL = 'http://192.168.0.84:4000'; 
@@ -34,19 +33,19 @@ type ProductsContextType = {
 // @ts-ignore
 const ProductsContext = createContext<ProductsContextType>(null);
 
-// Provedor (GRANDES MUDANÇAS)
+// Provedor
 export function ProductsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true); 
-  const [products, setProducts] = useState<Produto[]>([]); // Começa vazio
+  const [products, setProducts] = useState<Produto[]>([]); 
 
-  // 1. BUSCAR PRODUTOS DA API
+  // BUSCAR PRODUTOS DA API (sem mudanças)
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await fetch(`${API_URL}/api/products`);
         if (!response.ok) throw new Error('Falha ao buscar produtos da API');
         const data: Produto[] = await response.json();
-        setProducts(data); // Coloca os dados do Mongo no estado
+        setProducts(data); 
       } catch (error) {
         console.error('Erro ao buscar produtos:', error);
         Alert.alert('Erro de Conexão', 'Não foi possível buscar os produtos da API.');
@@ -58,7 +57,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     fetchProducts();
   }, []);
 
-  // 2. ADICIONAR PRODUTO (via API)
+  // ADICIONAR PRODUTO (sem mudanças)
   const addProduct = async (productData: Omit<Produto, '_id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/products`, {
@@ -75,18 +74,24 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Funções de busca local (rápidas, sem mudanças)
+  // getProductById (sem mudanças)
   const getProductById = (id: string): Produto | undefined => {
     return products.find((product) => product._id === id);
   };
+  
+  // --- MUDANÇA AQUI ---
   const getProductByCodigo = (codigo: string): Produto | undefined => {
     const codigoLimpo = codigo.toLowerCase();
+    
     return products.find((product) => 
-      product.codigo.toLowerCase() === codigoLimpo
+      // CORRIGIDO: Adicionado 'product?' para evitar crash
+      product?.codigo.toLowerCase() === codigoLimpo
     );
   };
+  // --- FIM DA MUDANÇA ---
 
-  // 3. ATUALIZAR PRODUTO (via API)
+
+  // ATUALIZAR PRODUTO (sem mudanças)
   const updateProduct = async (id: string, productData: Omit<Produto, '_id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/products/${id}`, {
@@ -105,7 +110,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 4. ELIMINAR PRODUTO (via API)
+  // ELIMINAR PRODUTO (sem mudanças)
   const deleteProduct = async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/products/${id}`, {

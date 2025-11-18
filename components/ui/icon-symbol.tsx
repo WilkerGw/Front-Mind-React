@@ -1,47 +1,40 @@
-// Fallback for using MaterialIcons on Android and web.
-
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
-import { ComponentProps } from 'react';
-import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+import { SymbolWeight } from 'expo-symbols';
+import React from 'react';
+import { OpaqueColorValue, StyleProp, ViewStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
-
-/**
- * Add your SF Symbols to Material Icons mappings here.
- */
+// Mapeamento de ícones
 const MAPPING = {
+  // Padrão
   'house.fill': 'home',
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-
-  // Clientes
-  'person.2.fill': 'people',
-  'plus.circle.fill': 'add-circle',
-  pencil: 'edit',
   'trash.fill': 'delete',
+  'plus.circle.fill': 'add-circle',
+  'xmark.circle.fill': 'close',
   
-  // Produtos
-  eyeglasses: 'style',
+  // NOVOS ÍCONES (Adicionados para a Pesquisa)
+  'magnifyingglass': 'search',
+  'xmark.circle.fill': 'cancel', // Para o botão de limpar
 
-  // Agenda
-  calendar: 'calendar-today',
-  'calendar.badge.plus': 'event',
-  magnifyingglass: 'search',
-
-  // Vendas
+  // App Específicos
+  'person.2.fill': 'people',
+  'eyeglasses': 'visibility',
   'cart.fill': 'shopping-cart',
   'cart.badge.plus': 'add-shopping-cart',
-  
-  // NOVO ÍCONE DE PAGAMENTO:
-  'creditcard.fill': 'payment',
-} as IconMapping;
+  'calendar': 'calendar-today',
+  'calendar.badge.plus': 'event',
+  'chart.bar.fill': 'bar-chart',
+} as Partial<
+  Record<
+    import('expo-symbols').SymbolViewProps['name'],
+    React.ComponentProps<typeof MaterialIcons>['name']
+  >
+>;
 
-/**
- * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
- */
+export type IconSymbolName = keyof typeof MAPPING;
+
 export function IconSymbol({
   name,
   size = 24,
@@ -51,7 +44,7 @@ export function IconSymbol({
   name: IconSymbolName;
   size?: number;
   color: string | OpaqueColorValue;
-  style?: StyleProp<TextStyle>;
+  style?: StyleProp<ViewStyle>;
   weight?: SymbolWeight;
 }) {
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;

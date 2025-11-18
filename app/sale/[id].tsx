@@ -1,160 +1,187 @@
-import { StyleSheet, Alert, Button, ScrollView, View } from 'react-native';
+import { StyleSheet, ScrollView, View, Alert, Pressable } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSales } from '@/context/SalesContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSales, Venda } from '@/context/SalesContext'; // Importamos apenas o necessário
 import { Colors } from '@/constants/theme';
-import { useClients } from '@/context/ClientsContext'; 
-import { useProducts } from '@/context/ProductsContext'; 
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useState, useEffect } from 'react';
 
-const formatCurrency = (value: number) => {
-  return `R$ ${value.toFixed(2).replace('.', ',')}`;
-};
+const OS_STATUS = ['Aguardando Laboratório', 'Disponível para Retirada', 'Entregue'];
 
-// Componente InfoRow (Definido localmente)
-const InfoRow = ({ label, value }: { label: string; value?: string | number }) => {
-  if (value === undefined || value === null || value === '') return null;
-  return (
-    <ThemedView style={styles.infoRow}>
-      <ThemedText style={styles.label}>{label}</ThemedText>
-      <ThemedText style={styles.value}>{value}</ThemedText>
-    </ThemedView>
-  );
-};
-
-export default function SaleDetailScreen() {
+export default function SaleDetailsScreen() {
+  const { id } = useLocalSearchParams();
+  
+  // Importamos a nova função updateSaleStatus
+  const { getSaleById, sales, updateSaleStatus } = useSales(); 
+  
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>(); 
-  const { getSaleById, deleteSale } = useSales();
-  const { getClientById } = useClients(); 
-  const { getProductById } = useProducts(); 
+  const theme = useColorScheme() ?? 'light';
+  
+  const [sale, setSale] = useState<Venda | undefined>(undefined);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const sale = getSaleById(id);
-  const client = sale ? getClientById(sale.cliente) : undefined; 
+  // Sincroniza o estado local com o Contexto Global
+  useEffect(() => {
+    if (typeof id === 'string') {
+      const foundSale = getSaleById(id);
+      setSale(foundSale);
+    }
+  }, [id, sales]); // Quando 'sales' mudar no contexto, atualiza aqui!
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Cancelar Venda",
-      `Tem a certeza que deseja cancelar esta venda?`,
-      [
-        { text: "Manter", style: "cancel" },
-        {
-          text: "Cancelar Venda",
-          style: "destructive", 
-          onPress: () => {
-            deleteSale(id);
-            router.back(); 
-          },
-        },
-      ]
-    );
-  };
-
-  if (!sale || !client) {
+  if (!sale) {
     return (
       <ThemedView style={styles.container}>
-        <ThemedText type="subtitle">Venda ou Cliente não encontrado.</ThemedText>
+        <ThemedText>Venda não encontrada.</ThemedText>
       </ThemedView>
     );
   }
 
+  const handleUpdateStatus = async (newStatus: string) => {
+    setIsUpdating(true);
+    try {
+      // Usamos a função do Contexto agora!
+      if (typeof id === 'string') {
+        await updateSaleStatus(id, newStatus);
+        Alert.alert('Sucesso', `Status atualizado para: ${newStatus}`);
+      }
+    } catch (error) {
+      // O alerta de erro já é tratado no contexto, mas podemos manter logs
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Entregue': return '#4CAF50'; 
+      case 'Disponível para Retirada': return '#2196F3'; 
+      default: return '#FF9800'; 
+    }
+  };
+
+  const currentStatus = sale.ordemServico?.status || 'Aguardando Laboratório';
+
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: `Venda #${id.substring(0, 6)}...`,
-        }} 
-      />
+      <Stack.Screen options={{ title: 'Detalhes da Venda' }} />
       <ScrollView>
-        {/* Informações do Cliente */}
-        <ThemedText type="subtitle" style={styles.title}>Cliente</ThemedText>
-        <ThemedText style={styles.value}>{client.fullName}</ThemedText>
-        <ThemedText style={styles.label}>{client.cpf}</ThemedText>
-        <ThemedText style={styles.label}>{client.phone}</ThemedText>
-
-        {/* Itens da Venda */}
-        <ThemedText type="subtitle" style={styles.title}>Itens Vendidos</ThemedText>
-        {sale.produtos.map((item) => {
-          const product = getProductById(item.produto); 
-          return (
-            <ThemedView key={item._id} style={styles.cartItem}>
-              <View style={styles.itemDetails}>
-                <ThemedText type="defaultSemiBold">
-                  {item.quantidade}x {product ? product.nome : 'Produto não encontrado'}
-                </ThemedText>
-                <ThemedText style={styles.label}>
-                  Cód: {product?.codigo} | {formatCurrency(item.valorUnitario)} cada
-                </ThemedText>
-              </View>
-              <ThemedText type="defaultSemiBold">
-                {formatCurrency(item.valorUnitario * item.quantidade)}
-              </ThemedText>
-            </ThemedView>
-          );
-        })}
-
-        {/* Total */}
-        <ThemedText type="title" style={styles.totalText}>
-          Total: {formatCurrency(sale.valorTotal)}
-        {/* AQUI ESTÁ A CORREÇÃO: */}
-        </ThemedText>
-        <ThemedText style={styles.dateText}>
-          Vendido em: {sale.dataVenda.toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' })}
-        </ThemedText>
         
-        {/* Detalhes do pagamento */}
-        <ThemedText type="subtitle" style={styles.title}>Pagamento</ThemedText>
-        <InfoRow label="Status" value={sale.status} />
-        <InfoRow label="Método" value={sale.pagamento.metodoPagamento} />
-        <InfoRow label="Condição" value={sale.pagamento.condicaoPagamento} />
-        <InfoRow label="Parcelas" value={sale.pagamento.parcelas} />
-        <InfoRow label="Valor de Entrada" value={formatCurrency(sale.pagamento.valorEntrada)} />
-        <InfoRow label="Valor Restante" value={formatCurrency(sale.pagamento.valorRestante)} />
-
-
-        {/* Botão de Cancelar */}
-        <View style={styles.deleteButtonContainer}>
-          <Button 
-            title="Cancelar Venda" 
-            color={Colors.light.icon} 
-            onPress={handleDelete} 
-          />
+        <View style={styles.header}>
+          <IconSymbol name="cart.fill" size={40} color={Colors[theme].tint} />
+          <View style={{ flex: 1 }}>
+            <ThemedText type="title">Venda</ThemedText>
+            <ThemedText style={styles.date}>
+              {new Date(sale.dataVenda).toLocaleString('pt-BR')}
+            </ThemedText>
+          </View>
+          <View style={styles.priceTag}>
+             <ThemedText type="subtitle" style={{ color: '#fff' }}>
+               R$ {sale.valorTotal.toFixed(2).replace('.', ',')}
+             </ThemedText>
+          </View>
         </View>
+
+        <View style={[styles.card, { borderColor: getStatusColor(currentStatus) }]}>
+          <ThemedText type="subtitle" style={{ marginBottom: 10 }}>Ordem de Serviço</ThemedText>
+          
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(currentStatus) }]}>
+            <ThemedText style={styles.statusText}>{currentStatus}</ThemedText>
+          </View>
+
+          <ThemedText style={styles.label}>Alterar Status:</ThemedText>
+          <View style={styles.statusButtons}>
+            {OS_STATUS.map((status) => (
+              <Pressable
+                key={status}
+                style={[
+                   styles.actionButton, 
+                   { 
+                     backgroundColor: status === currentStatus ? getStatusColor(status) : '#ddd',
+                     opacity: isUpdating ? 0.5 : 1 
+                   }
+                ]}
+                onPress={() => status !== currentStatus && handleUpdateStatus(status)}
+                disabled={status === currentStatus || isUpdating}
+              >
+                <ThemedText style={{ fontSize: 12, color: status === currentStatus ? '#fff' : '#000' }}>
+                  {status === 'Aguardando Laboratório' ? 'Laboratório' : status === 'Disponível para Retirada' ? 'Disponível' : 'Entregue'}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <ThemedText type="subtitle">Cliente</ThemedText>
+          <ThemedText style={styles.infoText}>
+            {sale.cliente?.fullName ?? 'Cliente Removido'}
+          </ThemedText>
+          {sale.cliente?.phone && <ThemedText>{sale.cliente.phone}</ThemedText>}
+        </View>
+
+        <View style={styles.section}>
+          <ThemedText type="subtitle">Itens</ThemedText>
+          {sale.produtos.map((item, index) => (
+            <View key={index} style={styles.productItem}>
+              <ThemedText style={{ flex: 1 }}>
+                {item.produto?.nome ?? 'Produto Removido'}
+              </ThemedText>
+              <ThemedText>
+                {item.quantidade}x R$ {item.valorUnitario.toFixed(2).replace('.', ',')}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <ThemedText type="subtitle">Pagamento</ThemedText>
+          <View style={styles.row}>
+            <ThemedText>Método:</ThemedText>
+            <ThemedText>{sale.pagamento.metodoPagamento}</ThemedText>
+          </View>
+          <View style={styles.row}>
+            <ThemedText>Condição:</ThemedText>
+            <ThemedText>{sale.pagamento.condicaoPagamento} ({sale.pagamento.parcelas}x)</ThemedText>
+          </View>
+          <View style={styles.row}>
+            <ThemedText>Entrada:</ThemedText>
+            <ThemedText style={{ color: 'green' }}>R$ {sale.pagamento.valorEntrada.toFixed(2).replace('.', ',')}</ThemedText>
+          </View>
+          <View style={styles.row}>
+            <ThemedText>Restante:</ThemedText>
+            <ThemedText style={{ color: 'red' }}>R$ {sale.pagamento.valorRestante.toFixed(2).replace('.', ',')}</ThemedText>
+          </View>
+        </View>
+
       </ScrollView>
     </ThemedView>
   );
 }
 
-// ... (estilos não mudam)
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  title: { marginTop: 16, marginBottom: 8 },
-  label: { fontSize: 14, color: '#666' },
-  value: { fontSize: 18, marginBottom: 4 },
-  cartItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
+  container: { flex: 1, padding: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
+  date: { fontSize: 14, opacity: 0.6 },
+  priceTag: { backgroundColor: '#2196F3', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  
+  card: { 
+    borderWidth: 2, 
+    borderRadius: 12, 
+    padding: 16, 
+    marginBottom: 24, 
+    backgroundColor: 'rgba(150, 150, 150, 0.1)' 
   },
-  itemDetails: { flex: 1, paddingRight: 8 },
-  totalText: { textAlign: 'right', marginTop: 24 },
-  dateText: {
-    textAlign: 'right',
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 24,
-  },
-  deleteButtonContainer: {
-    marginTop: 32,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ccc',
-    paddingTop: 16,
-  },
-  infoRow: { 
-    marginBottom: 16,
-  },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, marginBottom: 16 },
+  statusText: { color: '#fff', fontWeight: 'bold' },
+  
+  label: { fontSize: 14, marginBottom: 8, opacity: 0.7 },
+  statusButtons: { flexDirection: 'row', gap: 8 },
+  actionButton: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+
+  section: { marginBottom: 24 },
+  infoText: { fontSize: 16, marginTop: 4 },
+  productItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ccc' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
 });

@@ -6,24 +6,25 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Venda } from '@/context/SalesContext'; 
-import { useClients } from '@/context/ClientsContext'; 
+// REMOVIDO: Não precisamos mais do useClients
+// import { useClients } from '@/context/ClientsContext'; 
 
 type SaleListItemProps = {
-  sale: Venda;
+  sale: Venda; // Recebe a Venda POPULADA
   onPress: () => void;
-};
-
-const formatCurrency = (value: number) => {
-  return `R$ ${value.toFixed(2).replace('.', ',')}`;
 };
 
 export function SaleListItem({ sale, onPress }: SaleListItemProps) {
   const theme = useColorScheme() ?? 'light';
   const iconColor = Colors[theme].icon;
 
-  // MUDANÇA: Buscamos o cliente pelo ID
-  const { getClientById } = useClients();
-  const client = getClientById(sale.clientId);
+  // REMOVIDO: A lógica de procurar o cliente não é mais necessária
+  // const { clients } = useClients();
+  // const client = clients.find((c) => c._id === sale.cliente);
+
+  // ATUALIZADO: Acedemos ao nome diretamente do objeto populado
+  // Adicionamos '?' para o caso de um cliente ter sido eliminado
+  const clientName = sale.cliente?.fullName ?? 'Cliente não encontrado';
 
   return (
     <Pressable onPress={onPress}>
@@ -31,29 +32,26 @@ export function SaleListItem({ sale, onPress }: SaleListItemProps) {
         <View style={styles.iconContainer}>
           <IconSymbol name="cart.fill" size={24} color={iconColor} />
         </View>
-        
         <View style={styles.infoContainer}>
-          <ThemedText type="defaultSemiBold">
-            {/* MUDANÇA: Usamos o fullName do cliente buscado */}
-            {client ? client.fullName : 'Cliente não encontrado'}
-          </ThemedText>
+          {/* ATUALIZADO: Usamos a variável clientName */}
+          <ThemedText type="defaultSemiBold">{clientName}</ThemedText>
+          
           <ThemedText style={styles.detailText}>
-            {/* MUDANÇA: de itens.length para produtos.length */}
-            {sale.dataVenda.toLocaleDateString('pt-BR')} - {sale.produtos.length} item(ns)
+            {new Date(sale.dataVenda).toLocaleDateString('pt-BR')}
+          </ThemedText>
+          
+          <ThemedText style={styles.detailText}>
+            Total: R$ {sale.valorTotal.toFixed(2)}
           </ThemedText>
         </View>
-
-        <View style={styles.priceContainer}>
-          <ThemedText type="defaultSemiBold">
-            {formatCurrency(sale.valorTotal)}
-          </ThemedText>
+        <View style={styles.chevronContainer}>
+          <IconSymbol name="chevron.right" size={18} color={iconColor} />
         </View>
       </ThemedView>
     </Pressable>
   );
 }
 
-// ... (estilos não mudam)
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
@@ -61,21 +59,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
+    borderBottomColor: '#ccc', 
   },
   iconContainer: {
     marginRight: 16,
   },
   infoContainer: {
     flex: 1,
-    gap: 2,
+    gap: 2, 
   },
   detailText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666', 
   },
-  priceContainer: {
+  chevronContainer: {
     marginLeft: 'auto',
-    paddingLeft: 10,
   },
 });

@@ -81,20 +81,25 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
   const getClientById = (id: string): Cliente | undefined => {
     return clients.find((client) => client._id === id);
   };
+
+  // --- MUDANÇA AQUI ---
   const getClientByCPF = (cpf: string): Cliente | undefined => {
-    const cpfLimpo = cpf.replace(/[.-]/g, '');
+    // Esta linha é segura, pois o 'cpf' (parâmetro) vem do input
+    const cpfLimpo = cpf.replace(/[.-]/g, ''); 
+    
     return clients.find((client) => 
-      client.cpf?.replace(/[.-]/g, '') === cpfLimpo
+      // CORRIGIDO: Adicionado 'client?' para evitar crash se 'client' for null
+      client?.cpf?.replace(/[.-]/g, '') === cpfLimpo 
     );
   };
+  // --- FIM DA MUDANÇA ---
 
-  // --- MUDANÇAS AQUI ---
 
-  // 8. ATUALIZADO: updateClient (agora envia para a API)
+  // ATUALIZADO: updateClient (sem mudanças)
   const updateClient = async (id: string, clientData: Omit<Cliente, '_id'>) => {
     try {
-      const response = await fetch(`${API_URL}/api/clients/${id}`, { // Usa o ID na URL
-        method: 'PUT', // Método PUT
+      const response = await fetch(`${API_URL}/api/clients/${id}`, { 
+        method: 'PUT', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clientData),
       });
@@ -103,12 +108,11 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
         throw new Error('Falha ao atualizar o cliente na API');
       }
       
-      const updatedClient = await response.json(); // O cliente atualizado
+      const updatedClient = await response.json(); 
 
-      // Atualiza o estado local
       setClients((currentClients) => 
         currentClients.map((client) => 
-          client._id === id ? updatedClient : client // Substitui o cliente antigo pelo novo
+          client._id === id ? updatedClient : client 
         )
       );
     } catch (error) {
@@ -117,18 +121,17 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 9. ATUALIZADO: deleteClient (agora envia para a API)
+  // ATUALIZADO: deleteClient (sem mudanças)
   const deleteClient = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/clients/${id}`, { // Usa o ID na URL
-        method: 'DELETE', // Método DELETE
+      const response = await fetch(`${API_URL}/api/clients/${id}`, { 
+        method: 'DELETE', 
       });
 
       if (!response.ok) {
         throw new Error('Falha ao eliminar o cliente na API');
       }
 
-      // Remove o cliente do estado local
       setClients((currentClients) => 
         currentClients.filter((client) => client._id !== id)
       );
