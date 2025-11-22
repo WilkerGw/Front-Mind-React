@@ -1,16 +1,15 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 
-// O IP da sua API
-const API_URL = 'http://192.168.0.84:4000'; 
+// ✅ SEU IP CORRETO ATUALIZADO
+import { API_URL } from '../constants/Api';
 
-// Tipos (sem mudanças)
 export const TIPOS_PRODUTO = ['Óculos de Grau', 'Óculos de Sol', 'Lente', 'Lente de Contato', 'Acessório', 'Outro'] as const;
 export type TipoProduto = typeof TIPOS_PRODUTO[number];
 
 export type Produto = {
   _id: string;
-  codigo: string; 
+  codigo: string;
   nome: string;
   tipo: TipoProduto;
   marca: string;
@@ -19,45 +18,43 @@ export type Produto = {
   estoque: number;
 };
 
-// ContextType (sem mudanças)
 type ProductsContextType = {
   products: Produto[];
   addProduct: (productData: Omit<Produto, '_id'>) => void;
-  getProductById: (id: string) => Produto | undefined; 
-  updateProduct: (id: string, productData: Omit<Produto, '_id'>) => void; 
-  deleteProduct: (id: string) => void; 
-  getProductByCodigo: (codigo: string) => Produto | undefined; 
+  getProductById: (id: string) => Produto | undefined;
+  updateProduct: (id: string, productData: Omit<Produto, '_id'>) => void;
+  deleteProduct: (id: string) => void;
+  getProductByCodigo: (codigo: string) => Produto | undefined;
+  refreshProducts: () => Promise<void>; // Nova função
   isLoading: boolean;
 };
 
 // @ts-ignore
 const ProductsContext = createContext<ProductsContextType>(null);
 
-// Provedor
 export function ProductsProvider({ children }: { children: ReactNode }) {
-  const [isLoading, setIsLoading] = useState(true); 
-  const [products, setProducts] = useState<Produto[]>([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Produto[]>([]);
 
-  // BUSCAR PRODUTOS DA API (sem mudanças)
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/products`);
-        if (!response.ok) throw new Error('Falha ao buscar produtos da API');
-        const data: Produto[] = await response.json();
-        setProducts(data); 
-      } catch (error) {
-        console.error('Erro ao buscar produtos:', error);
-        Alert.alert('Erro de Conexão', 'Não foi possível buscar os produtos da API.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchProducts();
+  // Função de busca recriada com useCallback
+  const fetchProducts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/products`);
+      if (!response.ok) throw new Error('Falha ao buscar produtos da API');
+      const data: Produto[] = await response.json();
+      setProducts(data);
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  // ADICIONAR PRODUTO (sem mudanças)
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
   const addProduct = async (productData: Omit<Produto, '_id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/products`, {
@@ -74,24 +71,17 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // getProductById (sem mudanças)
   const getProductById = (id: string): Produto | undefined => {
     return products.find((product) => product._id === id);
   };
-  
-  // --- MUDANÇA AQUI ---
+
   const getProductByCodigo = (codigo: string): Produto | undefined => {
     const codigoLimpo = codigo.toLowerCase();
-    
-    return products.find((product) => 
-      // CORRIGIDO: Adicionado 'product?' para evitar crash
+    return products.find((product) =>
       product?.codigo.toLowerCase() === codigoLimpo
     );
   };
-  // --- FIM DA MUDANÇA ---
 
-
-  // ATUALIZAR PRODUTO (sem mudanças)
   const updateProduct = async (id: string, productData: Omit<Produto, '_id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/products/${id}`, {
@@ -101,7 +91,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
       });
       if (!response.ok) throw new Error('Falha ao atualizar o produto na API');
       const updatedProduct = await response.json();
-      setProducts((current) => 
+      setProducts((current) =>
         current.map((p) => (p._id === id ? updatedProduct : p))
       );
     } catch (error) {
@@ -110,14 +100,13 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ELIMINAR PRODUTO (sem mudanças)
   const deleteProduct = async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/products/${id}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Falha ao eliminar o produto na API');
-      setProducts((current) => 
+      setProducts((current) =>
         current.filter((p) => p._id !== id)
       );
     } catch (error) {
@@ -127,15 +116,16 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ProductsContext.Provider 
-      value={{ 
-        products, 
-        addProduct, 
-        getProductById, 
-        updateProduct, 
-        deleteProduct, 
-        getProductByCodigo, 
-        isLoading 
+    <ProductsContext.Provider
+      value={{
+        products,
+        addProduct,
+        getProductById,
+        updateProduct,
+        deleteProduct,
+        getProductByCodigo,
+        refreshProducts: fetchProducts,
+        isLoading
       }}
     >
       {children}
@@ -143,7 +133,6 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Hook (sem mudanças)
 export function useProducts() {
   const context = useContext(ProductsContext);
   if (!context) {

@@ -1,34 +1,41 @@
 /**
- * Uma paleta de cores moderna e profissional para Ótica.
+ * Uma paleta de cores moderna e profissional para Ótica com estilo Liquid Glass.
  */
-const tintColorLight = '#2563EB'; // Azul Royal moderno
-const tintColorDark = '#60A5FA'; // Azul mais claro para dark mode
+
+const tintColorLight = '#2563EB';
+const tintColorDark = '#60A5FA'; // Azul claro da imagem
 
 export const Colors = {
   light: {
-    text: '#1E293B', // Cinza escuro (não preto puro) para leitura suave
-    background: '#F1F5F9', // Cinza muito claro (quase branco) para o fundo da tela
-    surface: '#FFFFFF', // Branco puro para cartões
+    text: '#11181C',
+    background: '#F1F5F9', // Slate 100
     tint: tintColorLight,
-    icon: '#64748B',
-    tabIconDefault: '#94A3B8',
+    icon: '#687076',
+    tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
-    border: '#E2E8F0', // Cor de bordas sutis
-    success: '#10B981', // Verde Esmeralda
-    danger: '#EF4444', // Vermelho suave
-    warning: '#F59E0B', // Laranja/Amarelo
+    surface: '#FFFFFF',
+    border: '#E2E8F0',
+    gradient: ['#F8FAFC', '#E2E8F0'],
+    glass: {
+      background: 'rgba(255, 255, 255, 0.75)',
+      border: 'rgba(255, 255, 255, 0.8)',
+      shadow: 'rgba(37, 99, 235, 0.1)',
+    },
   },
   dark: {
-    text: '#F8FAFC', // Branco quase puro
-    background: '#0F172A', // Azul marinho muito escuro (Slate 900)
-    surface: '#1E293B', // Azul acinzentado (Slate 800) para cartões
+    text: '#ECEDEE',
+    background: '#0F172A', // Azul muito escuro (Slate 900)
     tint: tintColorDark,
-    icon: '#94A3B8',
-    tabIconDefault: '#64748B',
+    icon: '#9BA1A6',
+    tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
+    surface: '#1E293B', // Slate 800
     border: '#334155',
-    success: '#34D399',
-    danger: '#F87171',
-    warning: '#FBBF24',
+    gradient: ['#0F172A', '#1E293B'], // Gradiente sutil escuro
+    glass: {
+      background: 'rgba(30, 41, 59, 0.7)', // Slate 800 com transparência
+      border: 'rgba(148, 163, 184, 0.2)',
+      shadow: 'rgba(0, 0, 0, 0.3)',
+    },
   },
 };

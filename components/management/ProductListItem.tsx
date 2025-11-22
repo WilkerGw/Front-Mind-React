@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { GlassView } from '@/components/ui/GlassView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Produto } from '@/context/ProductsContext'; 
+import { Produto } from '@/context/ProductsContext';
 
 type ProductListItemProps = {
   product: Produto;
@@ -19,30 +19,32 @@ const formatCurrency = (value: number) => {
 
 export function ProductListItem({ product, onPress }: ProductListItemProps) {
   const theme = useColorScheme() ?? 'light';
-  const iconColor = Colors[theme].icon;
+  const iconColor = Colors[theme].tint; // Usando a cor de destaque (azul)
 
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView style={styles.card}>
-        <View style={styles.iconContainer}>
-          <IconSymbol name="eyeglasses" size={24} color={iconColor} />
+    <Pressable onPress={onPress} style={{ marginBottom: 8 }}>
+      <GlassView style={styles.card}>
+        <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
+          <IconSymbol name="eyeglasses" size={20} color={iconColor} />
         </View>
-        
+
         <View style={styles.infoContainer}>
           <ThemedText type="defaultSemiBold">{product.nome}</ThemedText>
           {/* CÓDIGO DO PRODUTO ADICIONADO AQUI */}
-          <ThemedText style={styles.detailText}>
-            Cód: {product.codigo} | {product.marca} - {product.tipo}
+          <ThemedText style={[styles.detailText, { color: Colors[theme].icon }]}>
+            Cód: {product.codigo} | {product.marca}
           </ThemedText>
-          <ThemedText style={styles.detailText}>
-            Estoque: {product.estoque}
+          <ThemedText style={[styles.detailText, { color: Colors[theme].icon }]}>
+            Estoque: {product.estoque} • {product.tipo}
           </ThemedText>
         </View>
 
         <View style={styles.priceContainer}>
-          <ThemedText type="defaultSemiBold">{formatCurrency(product.precoVenda)}</ThemedText>
+          <ThemedText type="defaultSemiBold" style={{ color: Colors[theme].tint }}>
+            {formatCurrency(product.precoVenda)}
+          </ThemedText>
         </View>
-      </ThemedView>
+      </GlassView>
     </Pressable>
   );
 }
@@ -51,24 +53,27 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
+    padding: 16,
+    borderRadius: 16,
   },
   iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 16,
   },
   infoContainer: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   detailText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    opacity: 0.8,
   },
   priceContainer: {
-    marginLeft: 'auto',
-    paddingLeft: 10,
+    marginLeft: 8,
+    alignItems: 'flex-end',
   },
 });

@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform } from 'react-native';
-import { ThemedView } from '@/components/themed-view';
+import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform, RefreshControl } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -9,19 +8,27 @@ import { AppointmentListItem } from '@/components/management/AppointmentListItem
 import { useRouter } from 'expo-router';
 import { useClients } from '@/context/ClientsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ModernButton } from '@/components/ui/ModernButton'; // Botão moderno para o "+"
+import { ModernButton } from '@/components/ui/ModernButton';
 
 export default function AgendamentosScreen() {
-  const { appointments, isLoading: appointmentsLoading } = useAppointments();
-  const { clients, isLoading: clientsLoading } = useClients();
+  const { appointments, isLoading: appointmentsLoading, refreshAppointments } = useAppointments();
+  const { clients, isLoading: clientsLoading, refreshClients } = useClients();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const theme = useColorScheme() ?? 'light';
   const router = useRouter();
   
   const handleAppointmentPress = (appointmentId: string) => {
     router.push(`/appointment/${appointmentId}`);
+  };
+
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    // Atualiza tanto agendamentos quanto clientes para garantir nomes corretos
+    await Promise.all([refreshAppointments(), refreshClients()]);
+    setIsRefreshing(false);
   };
 
   const filteredAppointments = useMemo(() => {
@@ -39,22 +46,12 @@ export default function AgendamentosScreen() {
     });
   }, [appointments, clients, searchQuery]);
 
-  if (appointmentsLoading || clientsLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
-        <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
       
-      {/* Header Personalizado com Efeito de "Vidro" fake (cor sólida limpa) */}
       <View style={[styles.header, { backgroundColor: Colors[theme].surface }]}>
         <View style={styles.titleRow}>
           <ThemedText type="title">Agendamentos</ThemedText>
-          {/* Botão flutuante pequeno ou ação rápida */}
           <ModernButton 
             title="+" 
             onPress={() => router.push('/add-appointment')} 
@@ -85,10 +82,22 @@ export default function AgendamentosScreen() {
           />
         )}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={Colors[theme].tint} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-             <IconSymbol name="calendar" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
-             <ThemedText style={{ opacity: 0.6 }}>Nenhum agendamento encontrado.</ThemedText>
+            {appointmentsLoading ? (
+               <ActivityIndicator size="large" color={Colors[theme].tint} />
+            ) : (
+              <>
+               <IconSymbol name="calendar" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
+               <ThemedText style={{ opacity: 0.6 }}>
+                  {searchQuery ? 'Nenhum agendamento encontrado.' : 'Nenhum agendamento registado.'}
+               </ThemedText>
+               {!searchQuery && <ThemedText style={{ opacity: 0.4, fontSize: 12, marginTop: 10 }}>Puxe para atualizar</ThemedText>}
+              </>
+            )}
           </View>
         }
       />
@@ -100,18 +109,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40, // Padding para a barra de status
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
-    // Sombra no header
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -128,7 +131,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12, // Mais arredondado
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
   },
@@ -141,7 +144,8 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 20,
     paddingTop: 10,
-    gap: 4, // Espaçamento entre itens (se suportado na sua versão React Native) ou use margin no item
+    gap: 4,
+    flexGrow: 1,
   },
   emptyContainer: {
     alignItems: 'center',

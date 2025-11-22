@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform } from 'react-native';
+import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform, RefreshControl } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -10,8 +10,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ModernButton } from '@/components/ui/ModernButton';
 
 export default function ClientesScreen() {
-  const { clients, isLoading } = useClients();
+  const { clients, isLoading, refreshClients } = useClients();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const theme = useColorScheme() ?? 'light';
   const router = useRouter();
@@ -20,24 +21,23 @@ export default function ClientesScreen() {
     router.push(`/client/${clientId}`);
   };
 
+  // Função para lidar com o gesto de "puxar para atualizar"
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshClients(); // Chama a função do contexto atualizado
+    setIsRefreshing(false);
+  };
+
   // Filtro de busca (Nome ou CPF)
   const filteredClients = useMemo(() => {
     if (!searchQuery.trim()) return clients;
     const lowerQuery = searchQuery.toLowerCase();
     
     return clients.filter((client) => 
-      client.fullName.toLowerCase().includes(lowerQuery) ||
+      (client.fullName && client.fullName.toLowerCase().includes(lowerQuery)) ||
       (client.cpf && client.cpf.includes(lowerQuery))
     );
   }, [clients, searchQuery]);
-
-  if (isLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
-        <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
@@ -76,10 +76,33 @@ export default function ClientesScreen() {
           />
         )}
         contentContainerStyle={styles.listContent}
+        // Adiciona o controlo de refresh (puxar para baixo)
+        refreshControl={
+          <RefreshControl 
+            refreshing={isRefreshing} 
+            onRefresh={onRefresh} 
+            colors={[Colors[theme].tint]} 
+            tintColor={Colors[theme].tint} 
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <IconSymbol name="person.2.slash.fill" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
-            <ThemedText style={{ opacity: 0.6 }}>Nenhum cliente encontrado.</ThemedText>
+            {isLoading ? (
+               <ActivityIndicator size="large" color={Colors[theme].tint} />
+            ) : (
+              <>
+                <IconSymbol name="person.2.slash.fill" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
+                <ThemedText style={{ opacity: 0.6 }}>
+                  {searchQuery ? 'Nenhum cliente encontrado.' : 'Nenhum cliente registado.'}
+                </ThemedText>
+                {/* Mensagem de ajuda se a lista estiver vazia */}
+                {!searchQuery && (
+                   <ThemedText style={{ opacity: 0.4, fontSize: 12, marginTop: 10 }}>
+                     Puxe a tela para baixo para recarregar
+                   </ThemedText>
+                )}
+              </>
+            )}
           </View>
         }
       />
@@ -90,11 +113,6 @@ export default function ClientesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -132,6 +150,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 10,
     gap: 4,
+    flexGrow: 1, 
   },
   emptyContainer: {
     alignItems: 'center',

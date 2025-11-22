@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 
 import { Cliente } from './ClientsContext';
 import { Produto } from './ProductsContext';
 
-// ATENÇÃO AO IP
-const API_URL = 'http://192.168.0.84:4000'; 
+// ✅ SEU IP CORRETO ATUALIZADO
+import { API_URL } from '../constants/Api';
 
 export const METODOS_PAGAMENTO = ['Dinheiro', 'Pix', 'Cartão de Débito', 'Cartão de Crédito'] as const;
 export type MetodoPagamento = typeof METODOS_PAGAMENTO[number];
@@ -23,15 +23,15 @@ export type Pagamento = {
 
 export type ItemVenda = {
   _id?: string;
-  produto: Produto; 
+  produto: Produto;
   quantidade: number;
-  valorUnitario: number; 
+  valorUnitario: number;
 };
 
 export type Venda = {
-  _id: string; 
-  cliente: Cliente; 
-  produtos: ItemVenda[]; 
+  _id: string;
+  cliente: Cliente;
+  produtos: ItemVenda[];
   valorTotal: number;
   dataVenda: Date;
   status: 'Concluído' | 'Pendente' | 'Cancelado';
@@ -42,13 +42,13 @@ export type Venda = {
 };
 
 export type ItemVendaInput = {
-  produto: string; 
+  produto: string;
   quantidade: number;
   valorUnitario: number;
 }
 
 export type VendaInput = {
-  cliente: string; 
+  cliente: string;
   produtos: ItemVendaInput[];
   valorTotal: number;
   status: string;
@@ -56,12 +56,12 @@ export type VendaInput = {
 }
 
 type SalesContextType = {
-  sales: Venda[]; 
-  addSale: (saleData: VendaInput) => void; 
-  getSaleById: (id: string) => Venda | undefined; 
+  sales: Venda[];
+  addSale: (saleData: VendaInput) => void;
+  getSaleById: (id: string) => Venda | undefined;
   deleteSale: (id: string) => void;
-  // NOVA FUNÇÃO NO TIPO
-  updateSaleStatus: (id: string, status: string) => Promise<void>; 
+  updateSaleStatus: (id: string, status: string) => Promise<void>;
+  refreshSales: () => Promise<void>; // Nova função
   isLoading: boolean;
 };
 
@@ -69,54 +69,53 @@ type SalesContextType = {
 const SalesContext = createContext<SalesContextType>(null);
 
 export function SalesProvider({ children }: { children: ReactNode }) {
-  const [isLoading, setIsLoading] = useState(true); 
-  const [sales, setSales] = useState<Venda[]>([]); 
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sales, setSales] = useState<Venda[]>([]);
+
+  const fetchSales = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/sales`);
+      if (!response.ok) throw new Error('Falha ao buscar vendas');
+
+      let data: Venda[] = await response.json();
+
+      data = data.map(sale => ({
+        ...sale,
+        dataVenda: new Date(sale.dataVenda),
+      }));
+      setSales(data);
+    } catch (error) {
+      console.error('Erro ao buscar vendas:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchSales = async () => {
-      setIsLoading(true); 
-      try {
-        const response = await fetch(`${API_URL}/api/sales`);
-        if (!response.ok) throw new Error('Falha ao buscar vendas');
-        
-        let data: Venda[] = await response.json(); 
-        
-        data = data.map(sale => ({
-          ...sale,
-          dataVenda: new Date(sale.dataVenda), 
-        }));
-        setSales(data);
-      } catch (error) {
-        console.error('Erro ao buscar vendas:', error);
-        // Alert removido para evitar spam em dev, mas podes manter se quiseres
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchSales();
-  }, [refreshKey]); 
+  }, [fetchSales]);
 
   const addSale = async (saleData: VendaInput) => {
     try {
       const response = await fetch(`${API_URL}/api/sales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saleData), 
+        body: JSON.stringify(saleData),
       });
-      
+
       if (!response.ok) {
         const err = await response.json();
         Alert.alert('Erro ao salvar', err.message || 'Falha ao salvar a venda');
         return;
       }
-      setRefreshKey(oldKey => oldKey + 1);
+      fetchSales(); // Recarrega a lista após adicionar
     } catch (error) {
       console.error('Erro ao adicionar venda:', error);
       Alert.alert('Erro', 'Não foi possível salvar a nova venda.');
     }
   };
-  
+
   const getSaleById = (id: string): Venda | undefined => {
     return sales.find((sale) => sale._id === id);
   };
@@ -127,17 +126,15 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Falha ao cancelar a venda');
-      setRefreshKey(oldKey => oldKey + 1);
+      fetchSales(); // Recarrega após deletar
     } catch (error) {
       console.error('Erro ao cancelar venda:', error);
       Alert.alert('Erro', 'Não foi possível cancelar a venda.');
     }
   };
 
-  // --- NOVA FUNÇÃO: Atualizar Status ---
   const updateSaleStatus = async (id: string, status: string) => {
     try {
-      // 1. Atualiza no Backend
       const response = await fetch(`${API_URL}/api/sales/${id}/os-status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -146,14 +143,12 @@ export function SalesProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) throw new Error('Falha ao atualizar status na API');
 
-      // 2. Atualiza no Estado Local (Memória) IMEDIATAMENTE
-      setSales((currentSales) => 
+      setSales((currentSales) =>
         currentSales.map((sale) => {
           if (sale._id === id) {
-            // Cria uma cópia da venda com o novo status
-            return { 
-              ...sale, 
-              ordemServico: { ...sale.ordemServico, status } 
+            return {
+              ...sale,
+              ordemServico: { ...sale.ordemServico, status }
             };
           }
           return sale;
@@ -163,12 +158,20 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       Alert.alert('Erro', 'Não foi possível atualizar o status.');
-      throw error; // Lança o erro para o componente saber que falhou
+      throw error;
     }
   };
 
   return (
-    <SalesContext.Provider value={{ sales, addSale, getSaleById, deleteSale, updateSaleStatus, isLoading }}>
+    <SalesContext.Provider value={{
+      sales,
+      addSale,
+      getSaleById,
+      deleteSale,
+      updateSaleStatus,
+      refreshSales: fetchSales,
+      isLoading
+    }}>
       {children}
     </SalesContext.Provider>
   );

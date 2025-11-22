@@ -1,73 +1,99 @@
-import { StyleSheet, FlatList, ActivityIndicator, View, TextInput, Pressable } from 'react-native';
-import { ThemedView } from '@/components/themed-view';
+import React, { useState, useMemo } from 'react';
+import {
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TextInput,
+  View,
+  Platform,
+  RefreshControl,
+  Pressable
+} from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ProductListItem } from '@/components/management/ProductListItem';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useProducts } from '@/context/ProductsContext';
-import { useRouter } from 'expo-router'; 
-import { useState } from 'react';
+import { ProductListItem } from '@/components/management/ProductListItem';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ModernButton } from '@/components/ui/ModernButton';
+import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { GlassView } from '@/components/ui/GlassView';
 
 export default function ProdutosScreen() {
-  const { products, isLoading } = useProducts();
+  const { products, isLoading, refreshProducts } = useProducts();
   const theme = useColorScheme() ?? 'light';
-  const router = useRouter(); 
+  const router = useRouter();
 
-  // Estado para a busca
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleProductPress = (productId: string) => {
     router.push(`/product/${productId}`);
   };
 
-  // Lógica de Filtragem
-  const filteredProducts = products.filter((product) => 
-    product.codigo.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    product.nome.toLowerCase().includes(searchQuery.toLowerCase()) // (Opcional) Também busca por nome
-  );
-
-  // Estilos dinâmicos para o input
-  const searchContainerStyle = {
-    backgroundColor: theme === 'dark' ? '#333' : '#f0f0f0',
-    borderColor: Colors[theme].icon,
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshProducts();
+    setIsRefreshing(false);
   };
-  const inputColor = Colors[theme].text;
-  const placeholderColor = Colors[theme].icon;
 
+  // Filtragem Otimizada
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const lowerQuery = searchQuery.toLowerCase();
+
+    return products.filter((product) =>
+      product.codigo.toLowerCase().includes(lowerQuery) ||
+      product.nome.toLowerCase().includes(lowerQuery) ||
+      product.marca?.toLowerCase().includes(lowerQuery) // Pesquisa também por marca se existir
+    );
+  }, [products, searchQuery]);
+
+  // Loading Inicial
   if (isLoading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </ThemedView>
+      <ScreenBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors[theme].tint} />
+        </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      
-      {/* BARRA DE PESQUISA */}
-      <View style={[styles.searchBarContainer, searchContainerStyle]}>
-        <IconSymbol name="magnifyingglass" size={20} color={placeholderColor} />
-        
-        <TextInput
-          style={[styles.searchInput, { color: inputColor }]}
-          placeholder="Pesquisar por código ou nome..."
-          placeholderTextColor={placeholderColor}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+    <ScreenBackground>
 
-        {/* Botão limpar busca */}
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')}>
-            <IconSymbol name="xmark.circle.fill" size={18} color={placeholderColor} />
-          </Pressable>
-        )}
-      </View>
-      {/* FIM DA BARRA DE PESQUISA */}
+      {/* Header Moderno com Glass Effect */}
+      <GlassView style={styles.header} intensity={80}>
+        <View style={styles.titleRow}>
+          <ThemedText type="title">Produtos</ThemedText>
+          <ModernButton
+            title="+"
+            onPress={() => router.push('/add-product')}
+            style={{ width: 40, height: 40, borderRadius: 20, paddingHorizontal: 0 }}
+          />
+        </View>
+
+        {/* Barra de Pesquisa */}
+        <View style={[styles.searchBar, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+          <IconSymbol size={20} name="magnifyingglass" color={Colors[theme].icon} />
+          <TextInput
+            style={[styles.searchInput, { color: Colors[theme].text }]}
+            placeholder="Código, nome ou marca..."
+            placeholderTextColor={Colors[theme].icon}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+              <IconSymbol name="xmark.circle.fill" size={16} color={Colors[theme].icon} style={{ opacity: 0.7 }} />
+            </Pressable>
+          )}
+        </View>
+      </GlassView>
 
       <FlatList
         data={filteredProducts}
@@ -78,45 +104,75 @@ export default function ProdutosScreen() {
             onPress={() => handleProductPress(item._id)}
           />
         )}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={[Colors[theme].tint]}
+            tintColor={Colors[theme].tint}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <ThemedText style={{ opacity: 0.6 }}>Nenhum produto encontrado.</ThemedText>
+            <IconSymbol name="bag" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
+            <ThemedText style={{ opacity: 0.6 }}>
+              {searchQuery ? 'Nenhum produto encontrado.' : 'O seu stock está vazio.'}
+            </ThemedText>
+            {!searchQuery && (
+              <ThemedText style={{ opacity: 0.4, fontSize: 12, marginTop: 10 }}>
+                Toque no + para adicionar produtos
+              </ThemedText>
+            )}
           </View>
         }
       />
-    </ThemedView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Estilos da Barra de Pesquisa
-  searchBarContainer: {
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    zIndex: 10,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
-    borderRadius: 10,
-    borderWidth: 1, // Borda fina opcional
-    borderColor: 'transparent', // Pode mudar se quiser borda visível
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 10,
     fontSize: 16,
     height: '100%',
   },
-  emptyContainer: {
+  listContent: {
     padding: 20,
+    paddingTop: 20,
+    gap: 12, // Aumentei o gap para dar mais espaço entre os cards
+    paddingBottom: 100, // Espaço para a TabBar
+  },
+  emptyContainer: {
     alignItems: 'center',
-    marginTop: 20,
-  }
+    justifyContent: 'center',
+    marginTop: 60,
+  },
 });

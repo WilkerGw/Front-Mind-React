@@ -1,37 +1,40 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 
-// O seu IP (sem mudanças)
-const API_URL = 'http://192.168.0.84:4000'; 
+// ---------------------------------------------------------
+// ✅ SEU IP CORRETO (Atualizado)
+import { API_URL } from '../constants/Api';
+// ---------------------------------------------------------
 
-// Tipos (sem mudanças)
+// Tipos
 export type Cliente = {
-  _id: string; 
-  fullName: string; 
+  _id: string;
+  fullName: string;
   phone: string;
-  birthDate?: string; 
+  birthDate?: string;
   cpf?: string;
-  gender?: string; 
-  address?: string; 
+  gender?: string;
+  address?: string;
   cep?: string;
-  notes?: string; 
+  notes?: string;
   esfericoDireito?: string;
   cilindricoDireito?: string;
   eixoDireito?: string;
   esfericoEsquerdo?: string;
   cilindricoEsquerdo?: string;
   eixoEsquerdo?: string;
-  adicao?: string; 
-  vencimentoReceita?: string; 
+  adicao?: string;
+  vencimentoReceita?: string;
 };
 
 type ClientsContextType = {
   clients: Cliente[];
-  addClient: (clientData: Omit<Cliente, '_id'>) => void;
-  getClientById: (id: string) => Cliente | undefined; 
-  updateClient: (id: string, clientData: Omit<Cliente, '_id'>) => void; 
-  deleteClient: (id: string) => void; 
-  getClientByCPF: (cpf: string) => Cliente | undefined; 
+  addClient: (clientData: Omit<Cliente, '_id'>) => Promise<void>;
+  getClientById: (id: string) => Cliente | undefined;
+  updateClient: (id: string, clientData: Omit<Cliente, '_id'>) => Promise<void>;
+  deleteClient: (id: string) => Promise<void>;
+  getClientByCPF: (cpf: string) => Cliente | undefined;
+  refreshClients: () => Promise<void>; // Função para recarregar manual
   isLoading: boolean;
 };
 
@@ -39,28 +42,36 @@ type ClientsContextType = {
 const ClientsContext = createContext<ClientsContextType>(null);
 
 export function ClientsProvider({ children }: { children: ReactNode }) {
-  const [isLoading, setIsLoading] = useState(true); 
-  const [clients, setClients] = useState<Cliente[]>([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [clients, setClients] = useState<Cliente[]>([]);
 
-  // Buscar Clientes (sem mudanças)
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/clients`);
-        if (!response.ok) throw new Error('Falha ao buscar dados da API');
-        const data: Cliente[] = await response.json();
-        setClients(data); 
-      } catch (error) {
-        console.error('Erro ao buscar clientes:', error);
-        Alert.alert('Erro de Conexão', 'Não foi possível buscar os clientes da API.');
-      } finally {
-        setIsLoading(false); 
+  // Função useCallback para poder ser chamada externamente (refresh)
+  const fetchClients = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      console.log(`Tentando conectar a: ${API_URL}/api/clients`);
+      const response = await fetch(`${API_URL}/api/clients`);
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP! status: ${response.status}`);
       }
-    };
-    fetchClients();
-  }, []); 
 
-  // Adicionar Cliente (sem mudanças)
+      const data: Cliente[] = await response.json();
+      console.log('Clientes carregados com sucesso:', data.length);
+      setClients(data);
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Buscar Clientes ao iniciar
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  // Adicionar Cliente
   const addClient = async (clientData: Omit<Cliente, '_id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/clients`, {
@@ -69,50 +80,42 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(clientData),
       });
       if (!response.ok) throw new Error('Falha ao salvar o cliente na API');
-      const newClient = await response.json(); 
+      const newClient = await response.json();
       setClients((currentClients) => [newClient, ...currentClients]);
+      return Promise.resolve();
     } catch (error) {
       console.error('Erro ao adicionar cliente:', error);
       Alert.alert('Erro', 'Não foi possível salvar o novo cliente.');
+      return Promise.reject(error);
     }
   };
 
-  // Funções de busca local (sem mudanças)
   const getClientById = (id: string): Cliente | undefined => {
     return clients.find((client) => client._id === id);
   };
 
-  // --- MUDANÇA AQUI ---
   const getClientByCPF = (cpf: string): Cliente | undefined => {
-    // Esta linha é segura, pois o 'cpf' (parâmetro) vem do input
-    const cpfLimpo = cpf.replace(/[.-]/g, ''); 
-    
-    return clients.find((client) => 
-      // CORRIGIDO: Adicionado 'client?' para evitar crash se 'client' for null
-      client?.cpf?.replace(/[.-]/g, '') === cpfLimpo 
+    const cpfLimpo = cpf.replace(/[.-]/g, '');
+    return clients.find((client) =>
+      client?.cpf?.replace(/[.-]/g, '') === cpfLimpo
     );
   };
-  // --- FIM DA MUDANÇA ---
 
-
-  // ATUALIZADO: updateClient (sem mudanças)
   const updateClient = async (id: string, clientData: Omit<Cliente, '_id'>) => {
     try {
-      const response = await fetch(`${API_URL}/api/clients/${id}`, { 
-        method: 'PUT', 
+      const response = await fetch(`${API_URL}/api/clients/${id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clientData),
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao atualizar o cliente na API');
-      }
-      
-      const updatedClient = await response.json(); 
+      if (!response.ok) throw new Error('Falha ao atualizar o cliente na API');
 
-      setClients((currentClients) => 
-        currentClients.map((client) => 
-          client._id === id ? updatedClient : client 
+      const updatedClient = await response.json();
+
+      setClients((currentClients) =>
+        currentClients.map((client) =>
+          client._id === id ? updatedClient : client
         )
       );
     } catch (error) {
@@ -121,18 +124,15 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ATUALIZADO: deleteClient (sem mudanças)
   const deleteClient = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/clients/${id}`, { 
-        method: 'DELETE', 
+      const response = await fetch(`${API_URL}/api/clients/${id}`, {
+        method: 'DELETE',
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao eliminar o cliente na API');
-      }
+      if (!response.ok) throw new Error('Falha ao eliminar o cliente na API');
 
-      setClients((currentClients) => 
+      setClients((currentClients) =>
         currentClients.filter((client) => client._id !== id)
       );
     } catch (error) {
@@ -142,8 +142,17 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ClientsContext.Provider 
-      value={{ clients, addClient, getClientById, updateClient, deleteClient, getClientByCPF, isLoading }}
+    <ClientsContext.Provider
+      value={{
+        clients,
+        addClient,
+        getClientById,
+        updateClient,
+        deleteClient,
+        getClientByCPF,
+        refreshClients: fetchClients,
+        isLoading
+      }}
     >
       {children}
     </ClientsContext.Provider>

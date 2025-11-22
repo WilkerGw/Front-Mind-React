@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { StyleSheet, ScrollView, Alert, ActivityIndicator, View, TouchableOpacity, Switch } from 'react-native';
+import { StyleSheet, ScrollView, Alert, ActivityIndicator, View, TouchableOpacity, Switch, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 
-import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { GlassView } from '@/components/ui/GlassView';
+import { ModernButton } from '@/components/ui/ModernButton';
 
 import { useAppointments, StatusAgendamento } from '@/context/AppointmentsContext';
 import { useClients } from '@/context/ClientsContext';
@@ -27,26 +29,27 @@ export default function AppointmentDetailsScreen() {
 
   const isLoading = apptLoading || clientsLoading;
 
-  // Estado local para feedback visual imediato (opcional, mas melhora a UX)
   const [isUpdating, setIsUpdating] = useState(false);
 
   if (isLoading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </ThemedView>
+      <ScreenBackground>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors[theme].tint} />
+        </View>
+      </ScreenBackground>
     );
   }
 
   if (!appointment) {
     return (
-      <ThemedView style={styles.centered}>
-        <IconSymbol name="exclamationmark.triangle" size={48} color="#FF3B30" />
-        <ThemedText type="title" style={{ marginTop: 16 }}>Agendamento não encontrado</ThemedText>
-        <TouchableOpacity style={styles.buttonSecondary} onPress={() => router.back()}>
-            <ThemedText>Voltar</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
+      <ScreenBackground>
+        <View style={styles.centered}>
+          <IconSymbol name="exclamationmark.triangle" size={48} color="#FF3B30" />
+          <ThemedText type="title" style={{ marginTop: 16 }}>Agendamento não encontrado</ThemedText>
+          <ModernButton title="Voltar" onPress={() => router.back()} style={{ marginTop: 24 }} />
+        </View>
+      </ScreenBackground>
     );
   }
 
@@ -55,11 +58,10 @@ export default function AppointmentDetailsScreen() {
   const handleStatusChange = async (newStatus: StatusAgendamento) => {
     setIsUpdating(true);
     try {
-      // Se mudar para "Marcado" ou "Cancelado", resetamos a compra para false por segurança
       const shouldResetPurchase = newStatus !== 'Concluído';
-      await updateAppointment(appointment._id, { 
+      await updateAppointment(appointment._id, {
         status: newStatus,
-        madePurchase: shouldResetPurchase ? false : appointment.madePurchase 
+        madePurchase: shouldResetPurchase ? false : appointment.madePurchase
       });
     } finally {
       setIsUpdating(false);
@@ -81,160 +83,302 @@ export default function AppointmentDetailsScreen() {
       "Deseja realmente excluir?",
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Excluir", style: "destructive", onPress: async () => {
+        {
+          text: "Excluir", style: "destructive", onPress: async () => {
             await deleteAppointment(appointment._id);
             router.back();
-        }}
+          }
+        }
       ]
     );
   };
 
-  const formattedDate = new Date(appointment.date).toLocaleDateString('pt-BR');
+  const formattedDate = new Date(appointment.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const formattedTime = new Date(appointment.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Concluído': return '#10B981';
+      case 'Cancelado': return '#EF4444';
+      case 'Faltou': return '#EF4444';
+      default: return Colors[theme].tint;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'Concluído': return 'checkmark.circle.fill';
+      case 'Cancelado': return 'xmark.circle.fill';
+      case 'Faltou': return 'xmark.circle.fill';
+      default: return 'clock.fill';
+    }
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: 'Detalhes' }} />
-      
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        {/* Cabeçalho */}
-        <View style={[styles.card, { backgroundColor: Colors[theme].background }]}>
-          <View style={styles.headerRow}>
-             <IconSymbol name="calendar" size={24} color={Colors[theme].tint} />
-             <ThemedText type="subtitle" style={{ marginLeft: 8 }}>{formattedDate} às {formattedTime}</ThemedText>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) }]}>
-            <ThemedText style={styles.statusText}>{appointment.status.toUpperCase()}</ThemedText>
-          </View>
+    <ScreenBackground>
+      <Stack.Screen options={{ title: 'Detalhes', headerShown: false }} />
+
+      {/* Header */}
+      <GlassView style={styles.header} intensity={80}>
+        <View style={styles.headerContent}>
+          <ModernButton
+            title=""
+            onPress={() => router.back()}
+            style={styles.backButton}
+            icon={<IconSymbol name="chevron.left" size={20} color={Colors[theme].tint} />}
+          />
+          <ThemedText type="title">Detalhes</ThemedText>
+          <View style={{ width: 42 }} />
         </View>
+      </GlassView>
 
-        {/* Nova Seção: GESTÃO DO ATENDIMENTO */}
-        <View style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>Gestão do Atendimento</ThemedText>
-          <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#333' : '#fff' }]}>
-            
-            <ThemedText style={{ marginBottom: 10, color: '#888' }}>Alterar situação:</ThemedText>
-            
-            {/* Botões de Status Rápido */}
-            <View style={styles.quickActionsRow}>
-              <TouchableOpacity 
-                style={[styles.actionButton, appointment.status === 'Concluído' && styles.activeGreen]} 
-                onPress={() => handleStatusChange('Concluído')}
-              >
-                <IconSymbol name="checkmark.circle.fill" size={20} color={appointment.status === 'Concluído' ? '#fff' : '#34C759'} />
-                <ThemedText style={[styles.actionText, appointment.status === 'Concluído' && { color: '#fff' }]}>Compareceu</ThemedText>
-              </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.content}>
 
-              <TouchableOpacity 
-                style={[styles.actionButton, appointment.status === 'Cancelado' && styles.activeRed]}
-                onPress={() => handleStatusChange('Cancelado')}
-              >
-                <IconSymbol name="xmark.circle.fill" size={20} color={appointment.status === 'Cancelado' ? '#fff' : '#FF3B30'} />
-                <ThemedText style={[styles.actionText, appointment.status === 'Cancelado' && { color: '#fff' }]}>Faltou</ThemedText>
-              </TouchableOpacity>
+        {/* Data e Status */}
+        <GlassView style={styles.section} delay={50}>
+          <View style={styles.dateStatusContainer}>
+            <View style={styles.dateRow}>
+              <IconSymbol name="calendar" size={20} color={Colors[theme].tint} />
+              <ThemedText type="defaultSemiBold" style={{ fontSize: 18 }}>
+                {formattedDate} às {formattedTime}
+              </ThemedText>
             </View>
 
-            {/* Toggle de Compra (Aparece apenas se Concluído) */}
-            {appointment.status === 'Concluído' && (
-              <View style={styles.purchaseRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                   <IconSymbol name="cart.fill" size={20} color={Colors[theme].text} />
-                   <ThemedText type="defaultSemiBold" style={{ marginLeft: 8 }}>Venda Realizada?</ThemedText>
-                </View>
-                <Switch 
-                  value={appointment.madePurchase || false}
-                  onValueChange={handlePurchaseToggle}
-                  trackColor={{ false: "#767577", true: Colors[theme].tint }}
-                />
-              </View>
-            )}
+            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(appointment.status)}20` }]}>
+              <IconSymbol name={getStatusIcon(appointment.status)} size={16} color={getStatusColor(appointment.status)} />
+              <ThemedText style={{ color: getStatusColor(appointment.status), fontWeight: 'bold', marginLeft: 6 }}>
+                {appointment.status.toUpperCase()}
+              </ThemedText>
+            </View>
           </View>
-        </View>
+        </GlassView>
 
-        {/* Dados do Cliente */}
-        <View style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>Cliente</ThemedText>
-          <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#333' : '#f9f9f9' }]}>
-            <ThemedText type="defaultSemiBold" style={{ fontSize: 18 }}>{clientName}</ThemedText>
-            <ThemedText style={{ marginTop: 4, color: '#666' }}>{clientPhone}</ThemedText>
+        {/* Gestão do Atendimento */}
+        <GlassView style={styles.section} delay={75}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Gestão do Atendimento
+          </ThemedText>
+
+          <ThemedText style={styles.label}>Alterar situação:</ThemedText>
+
+          <View style={styles.statusButtons}>
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                { borderColor: '#10B981' },
+                appointment.status === 'Concluído' && styles.statusButtonActiveGreen
+              ]}
+              onPress={() => handleStatusChange('Concluído')}
+              disabled={isUpdating}
+            >
+              <IconSymbol
+                name="checkmark.circle.fill"
+                size={20}
+                color={appointment.status === 'Concluído' ? '#fff' : '#10B981'}
+              />
+              <ThemedText style={[
+                styles.statusButtonText,
+                appointment.status === 'Concluído' && { color: '#fff' }
+              ]}>
+                Compareceu
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                { borderColor: '#EF4444' },
+                (appointment.status === 'Cancelado' || appointment.status === 'Faltou') && styles.statusButtonActiveRed
+              ]}
+              onPress={() => handleStatusChange('Cancelado')}
+              disabled={isUpdating}
+            >
+              <IconSymbol
+                name="xmark.circle.fill"
+                size={20}
+                color={(appointment.status === 'Cancelado' || appointment.status === 'Faltou') ? '#fff' : '#EF4444'}
+              />
+              <ThemedText style={[
+                styles.statusButtonText,
+                (appointment.status === 'Cancelado' || appointment.status === 'Faltou') && { color: '#fff' }
+              ]}>
+                Faltou
+              </ThemedText>
+            </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Botões Finais */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: Colors[theme].tint }]} 
-            onPress={() => router.push(`/edit-appointment?id=${appointment._id}`)}
-          >
-            <ThemedText style={styles.buttonText}>Editar Dados</ThemedText>
-          </TouchableOpacity>
+          {/* Toggle de Venda (sempre visível, mas msg diferente) */}
+          <View style={styles.switchRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <IconSymbol name="cart.fill" size={18} color={Colors[theme].text} />
+              <ThemedText style={{ marginLeft: 8 }}>Venda Realizada?</ThemedText>
+            </View>
+            <Switch
+              value={appointment.madePurchase || false}
+              onValueChange={handlePurchaseToggle}
+              trackColor={{ false: '#767577', true: '#60A5FA' }}
+              thumbColor={(appointment.madePurchase || false) ? '#2563EB' : '#f4f3f4'}
+              disabled={isUpdating}
+            />
+          </View>
+        </GlassView>
 
-          <TouchableOpacity style={[styles.button, styles.buttonDestructive]} onPress={handleDelete}>
-            <ThemedText style={styles.buttonText}>Excluir Agendamento</ThemedText>
-          </TouchableOpacity>
-        </View>
+        {/* Cliente */}
+        <GlassView style={styles.section} delay={100}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            <IconSymbol name="person.fill" size={20} color={Colors[theme].tint} /> Cliente
+          </ThemedText>
 
+          <View style={styles.clientCard}>
+            <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>
+              {clientName}
+            </ThemedText>
+            <ThemedText style={{ opacity: 0.7, fontSize: 14, marginTop: 4 }}>
+              {clientPhone}
+            </ThemedText>
+          </View>
+        </GlassView>
+
+        {/* Botões de Ação */}
+        <ModernButton
+          title="Editar Dados"
+          onPress={() => router.push(`/edit-appointment?id=${appointment._id}`)}
+          style={styles.updateButton}
+        />
+
+        <ModernButton
+          title="Excluir Agendamento"
+          onPress={handleDelete}
+          style={[styles.deleteButton, { backgroundColor: '#EF4444' }]}
+        />
+
+        <View style={{ height: 40 }} />
       </ScrollView>
-      
-      {/* Loading Overlay se estiver salvando */}
+
+      {/* Loading Overlay */}
       {isUpdating && (
         <View style={styles.overlayLoading}>
           <ActivityIndicator size="small" color="#fff" />
         </View>
       )}
-    </ThemedView>
+    </ScreenBackground>
   );
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'Confirmado': return '#34C759';
-    case 'Cancelado': return '#FF3B30';
-    case 'Concluído': return '#8E8E93';
-    default: return '#007AFF';
-  }
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  content: { padding: 16 },
-  card: {
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    zIndex: 10,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    paddingHorizontal: 0,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  content: {
+    padding: 20
+  },
+  section: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    marginBottom: 8,
+    opacity: 0.8,
+  },
+  dateStatusContainer: {
+    gap: 12,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  statusButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statusButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 8,
+    backgroundColor: 'rgba(96, 165, 250, 0.05)',
+  },
+  statusButtonActiveGreen: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  statusButtonActiveRed: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  statusButtonText: {
+    fontWeight: '600',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(96, 165, 250, 0.05)',
+  },
+  clientCard: {
     padding: 16,
     borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
+    backgroundColor: 'rgba(96, 165, 250, 0.05)',
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  section: { marginTop: 20 },
-  sectionTitle: { marginBottom: 8, marginLeft: 4 },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-  statusText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-  
-  // Estilos novos para gestão
-  quickActionsRow: { flexDirection: 'row', gap: 10, marginTop: 5 },
-  actionButton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', gap: 8
+  updateButton: {
+    marginTop: 8,
   },
-  activeGreen: { backgroundColor: '#34C759', borderColor: '#34C759' },
-  activeRed: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
-  actionText: { fontWeight: '600', color: '#555' },
-  
-  purchaseRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#eee'
+  deleteButton: {
+    marginTop: 8,
   },
-
-  actionsContainer: { marginTop: 32, gap: 12 },
-  button: { padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  buttonSecondary: { marginTop: 20, padding: 12 },
-  buttonDestructive: { backgroundColor: '#FF3B30' },
-  buttonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
-  
   overlayLoading: {
-    position: 'absolute', bottom: 30, alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, borderRadius: 20
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 10,
+    borderRadius: 20
   }
 });

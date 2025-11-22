@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform } from 'react-native';
+import { StyleSheet, FlatList, ActivityIndicator, TextInput, View, Platform, RefreshControl } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -10,8 +10,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ModernButton } from '@/components/ui/ModernButton';
 
 export default function VendasScreen() {
-  const { sales, isLoading } = useSales();
+  const { sales, isLoading, refreshSales } = useSales();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const theme = useColorScheme() ?? 'light';
   const router = useRouter();
@@ -20,30 +21,25 @@ export default function VendasScreen() {
     router.push(`/sale/${saleId}`);
   };
 
-  // Filtro de Busca (Nome do Cliente)
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshSales();
+    setIsRefreshing(false);
+  };
+
   const filteredSales = useMemo(() => {
     if (!searchQuery.trim()) return sales;
     const lowerQuery = searchQuery.toLowerCase();
     
     return sales.filter((sale) => {
-        // Tratamento seguro para caso o cliente não esteja populado
         const clientName = typeof sale.cliente === 'object' ? sale.cliente?.fullName : '';
         return clientName?.toLowerCase().includes(lowerQuery);
     });
   }, [sales, searchQuery]);
 
-  if (isLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: Colors[theme].background }]}>
-        <ActivityIndicator size="large" color={Colors[theme].tint} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
       
-      {/* Header Fixo Moderno */}
       <View style={[styles.header, { backgroundColor: Colors[theme].surface }]}>
         <View style={styles.titleRow}>
           <ThemedText type="title">Vendas</ThemedText>
@@ -77,10 +73,22 @@ export default function VendasScreen() {
           />
         )}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={Colors[theme].tint} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <IconSymbol name="paperclip" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
-            <ThemedText style={{ opacity: 0.6 }}>Nenhuma venda encontrada.</ThemedText>
+            {isLoading ? (
+               <ActivityIndicator size="large" color={Colors[theme].tint} />
+            ) : (
+              <>
+                <IconSymbol name="paperclip" size={48} color={Colors[theme].icon} style={{ opacity: 0.3, marginBottom: 16 }} />
+                <ThemedText style={{ opacity: 0.6 }}>
+                   {searchQuery ? 'Nenhuma venda encontrada.' : 'Nenhuma venda registada.'}
+                </ThemedText>
+                {!searchQuery && <ThemedText style={{ opacity: 0.4, fontSize: 12, marginTop: 10 }}>Puxe para atualizar</ThemedText>}
+              </>
+            )}
           </View>
         }
       />
@@ -91,11 +99,6 @@ export default function VendasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -133,6 +136,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 10,
     gap: 6,
+    flexGrow: 1,
   },
   emptyContainer: {
     alignItems: 'center',
