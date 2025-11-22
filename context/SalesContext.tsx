@@ -4,7 +4,6 @@ import { Alert } from 'react-native';
 import { Cliente } from './ClientsContext';
 import { Produto } from './ProductsContext';
 
-// ✅ SEU IP CORRETO ATUALIZADO
 import { API_URL } from '../constants/Api';
 
 export const METODOS_PAGAMENTO = ['Dinheiro', 'Pix', 'Cartão de Débito', 'Cartão de Crédito'] as const;
@@ -36,16 +35,14 @@ export type Venda = {
   dataVenda: Date;
   status: 'Concluído' | 'Pendente' | 'Cancelado';
   pagamento: Pagamento;
-  ordemServico?: {
-    status: string;
-  };
+  ordemServico?: { status: string };
 };
 
 export type ItemVendaInput = {
   produto: string;
   quantidade: number;
   valorUnitario: number;
-}
+};
 
 export type VendaInput = {
   cliente: string;
@@ -53,7 +50,7 @@ export type VendaInput = {
   valorTotal: number;
   status: string;
   pagamento: Omit<Pagamento, '_id'>;
-}
+};
 
 type SalesContextType = {
   sales: Venda[];
@@ -61,32 +58,37 @@ type SalesContextType = {
   getSaleById: (id: string) => Venda | undefined;
   deleteSale: (id: string) => void;
   updateSaleStatus: (id: string, status: string) => Promise<void>;
-  refreshSales: () => Promise<void>; // Nova função
+  refreshSales: () => Promise<void>;
   isLoading: boolean;
+  error: string | null;
 };
 
 // @ts-ignore
-const SalesContext = createContext<SalesContextType>(null);
+const SalesContext = createContext<SalesContextType>(null as any);
 
 export function SalesProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [sales, setSales] = useState<Venda[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchSales = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await fetch(`${API_URL}/api/sales`);
-      if (!response.ok) throw new Error('Falha ao buscar vendas');
-
-      let data: Venda[] = await response.json();
-
-      data = data.map(sale => ({
+      if (!response.ok) {
+        const msg = await response.text();
+        throw new Error(`Falha ao buscar vendas: ${msg}`);
+      }
+      const data: Venda[] = await response.json();
+      const parsed = data.map(sale => ({
         ...sale,
         dataVenda: new Date(sale.dataVenda),
       }));
-      setSales(data);
-    } catch (error) {
-      console.error('Erro ao buscar vendas:', error);
+      setSales(parsed);
+    } catch (err) {
+      console.error('Erro ao buscar vendas:', err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -103,21 +105,20 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(saleData),
       });
-
       if (!response.ok) {
         const err = await response.json();
         Alert.alert('Erro ao salvar', err.message || 'Falha ao salvar a venda');
         return;
       }
-      fetchSales(); // Recarrega a lista após adicionar
-    } catch (error) {
-      console.error('Erro ao adicionar venda:', error);
+      fetchSales();
+    } catch (e) {
+      console.error('Erro ao adicionar venda:', e);
       Alert.alert('Erro', 'Não foi possível salvar a nova venda.');
     }
   };
 
   const getSaleById = (id: string): Venda | undefined => {
-    return sales.find((sale) => sale._id === id);
+    return sales.find(s => s._id === id);
   };
 
   const deleteSale = async (id: string) => {
@@ -126,9 +127,9 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Falha ao cancelar a venda');
-      fetchSales(); // Recarrega após deletar
-    } catch (error) {
-      console.error('Erro ao cancelar venda:', error);
+      fetchSales();
+    } catch (e) {
+      console.error('Erro ao cancelar venda:', e);
       Alert.alert('Erro', 'Não foi possível cancelar a venda.');
     }
   };
@@ -140,38 +141,32 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
-
       if (!response.ok) throw new Error('Falha ao atualizar status na API');
-
-      setSales((currentSales) =>
-        currentSales.map((sale) => {
-          if (sale._id === id) {
-            return {
-              ...sale,
-              ordemServico: { ...sale.ordemServico, status }
-            };
-          }
-          return sale;
-        })
+      setSales(current =>
+        current.map(sale =>
+          sale._id === id ? { ...sale, ordemServico: { ...sale.ordemServico, status } } : sale
+        )
       );
-
-    } catch (error) {
-      console.error('Erro ao atualizar status:', error);
+    } catch (e) {
+      console.error('Erro ao atualizar status:', e);
       Alert.alert('Erro', 'Não foi possível atualizar o status.');
-      throw error;
+      throw e;
     }
   };
 
   return (
-    <SalesContext.Provider value={{
-      sales,
-      addSale,
-      getSaleById,
-      deleteSale,
-      updateSaleStatus,
-      refreshSales: fetchSales,
-      isLoading
-    }}>
+    <SalesContext.Provider
+      value={{
+        sales,
+        addSale,
+        getSaleById,
+        deleteSale,
+        updateSaleStatus,
+        refreshSales: fetchSales,
+        isLoading,
+        error,
+      }}
+    >
       {children}
     </SalesContext.Provider>
   );
